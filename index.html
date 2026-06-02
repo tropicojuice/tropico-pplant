@@ -1926,6 +1926,11 @@ function downloadBatchRecord(){
       <div style="font-size:13px;color:var(--text2);margin-bottom:18px;">Upload the WI documents for this product. Upload one at a time or all three together — AI will work out what each one is.</div>
 
       <!-- Document slots -->
+      <!-- Hidden file inputs - iOS needs these outside labels -->
+      <input type="file" accept=".pdf,image/*" id="file-wi" style="display:none;" onchange="addDoc('wi',this)"/>
+      <input type="file" accept=".pdf,image/*" id="file-picklist" style="display:none;" onchange="addDoc('picklist',this)"/>
+      <input type="file" accept=".pdf,image/*" id="file-qc" style="display:none;" onchange="addDoc('qc',this)"/>
+
       <div id="doc-slots">
         <div class="doc-slot" id="slot-wi">
           <div class="doc-slot-icon">&#128196;</div>
@@ -1933,9 +1938,7 @@ function downloadBatchRecord(){
             <div class="doc-slot-title">Work Instruction</div>
             <div class="doc-slot-sub">Mixing steps, HIPEX settings, packing</div>
           </div>
-          <label class="doc-slot-btn">
-            Add<input type="file" accept=".pdf,image/*" style="display:none;" onchange="addDoc('wi',this)"/>
-          </label>
+          <button class="doc-slot-btn" onclick="document.getElementById('file-wi').click()">Add</button>
         </div>
         <div class="doc-slot" id="slot-picklist">
           <div class="doc-slot-icon">&#128203;</div>
@@ -1943,9 +1946,7 @@ function downloadBatchRecord(){
             <div class="doc-slot-title">Work Order Picklist</div>
             <div class="doc-slot-sub">Ingredient codes, quantities, units</div>
           </div>
-          <label class="doc-slot-btn">
-            Add<input type="file" accept=".pdf,image/*" style="display:none;" onchange="addDoc('picklist',this)"/>
-          </label>
+          <button class="doc-slot-btn" onclick="document.getElementById('file-picklist').click()">Add</button>
         </div>
         <div class="doc-slot" id="slot-qc">
           <div class="doc-slot-icon">&#129514;</div>
@@ -1953,9 +1954,7 @@ function downloadBatchRecord(){
             <div class="doc-slot-title">QC In-Line Test Sheet</div>
             <div class="doc-slot-sub">Brix, pH, viscosity specs</div>
           </div>
-          <label class="doc-slot-btn">
-            Add<input type="file" accept=".pdf,image/*" style="display:none;" onchange="addDoc('qc',this)"/>
-          </label>
+          <button class="doc-slot-btn" onclick="document.getElementById('file-qc').click()">Add</button>
         </div>
       </div>
 
@@ -2075,7 +2074,7 @@ function addDoc(type, input){
     const slot=document.getElementById('slot-'+type);
     slot.classList.add('loaded');
     const btn=slot.querySelector('.doc-slot-btn');
-    if(btn)btn.textContent='✓ Loaded';
+    if(btn){btn.textContent='\u2713 Loaded';btn.style.background='var(--green-dim)';btn.style.borderColor='var(--green)';btn.style.color='var(--green)';}
     // Add filename
     let fileDiv=slot.querySelector('.doc-slot-file');
     if(!fileDiv){fileDiv=document.createElement('div');fileDiv.className='doc-slot-file';slot.querySelector('.doc-slot-info').appendChild(fileDiv);}
@@ -2437,6 +2436,11 @@ Mark PASS only if code, name, batch, DOM and weight are all correct.`}
       <div style="font-size:13px;color:var(--text2);margin-bottom:18px;">Upload the WI documents for this product. Upload one at a time or all three together — AI will work out what each one is.</div>
 
       <!-- Document slots -->
+      <!-- Hidden file inputs - iOS needs these outside labels -->
+      <input type="file" accept=".pdf,image/*" id="file-wi" style="display:none;" onchange="addDoc('wi',this)"/>
+      <input type="file" accept=".pdf,image/*" id="file-picklist" style="display:none;" onchange="addDoc('picklist',this)"/>
+      <input type="file" accept=".pdf,image/*" id="file-qc" style="display:none;" onchange="addDoc('qc',this)"/>
+
       <div id="doc-slots">
         <div class="doc-slot" id="slot-wi">
           <div class="doc-slot-icon">&#128196;</div>
@@ -2444,9 +2448,7 @@ Mark PASS only if code, name, batch, DOM and weight are all correct.`}
             <div class="doc-slot-title">Work Instruction</div>
             <div class="doc-slot-sub">Mixing steps, HIPEX settings, packing</div>
           </div>
-          <label class="doc-slot-btn">
-            Add<input type="file" accept=".pdf,image/*" style="display:none;" onchange="addDoc('wi',this)"/>
-          </label>
+          <button class="doc-slot-btn" onclick="document.getElementById('file-wi').click()">Add</button>
         </div>
         <div class="doc-slot" id="slot-picklist">
           <div class="doc-slot-icon">&#128203;</div>
@@ -2454,9 +2456,7 @@ Mark PASS only if code, name, batch, DOM and weight are all correct.`}
             <div class="doc-slot-title">Work Order Picklist</div>
             <div class="doc-slot-sub">Ingredient codes, quantities, units</div>
           </div>
-          <label class="doc-slot-btn">
-            Add<input type="file" accept=".pdf,image/*" style="display:none;" onchange="addDoc('picklist',this)"/>
-          </label>
+          <button class="doc-slot-btn" onclick="document.getElementById('file-picklist').click()">Add</button>
         </div>
         <div class="doc-slot" id="slot-qc">
           <div class="doc-slot-icon">&#129514;</div>
@@ -2464,9 +2464,7 @@ Mark PASS only if code, name, batch, DOM and weight are all correct.`}
             <div class="doc-slot-title">QC In-Line Test Sheet</div>
             <div class="doc-slot-sub">Brix, pH, viscosity specs</div>
           </div>
-          <label class="doc-slot-btn">
-            Add<input type="file" accept=".pdf,image/*" style="display:none;" onchange="addDoc('qc',this)"/>
-          </label>
+          <button class="doc-slot-btn" onclick="document.getElementById('file-qc').click()">Add</button>
         </div>
       </div>
 
