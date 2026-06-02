@@ -280,6 +280,16 @@
   .toast.error{border-color:var(--red);color:var(--red);}
 
   /* PARSER */
+  .doc-slot{display:flex;align-items:center;gap:12px;padding:13px;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);margin-bottom:9px;transition:all 0.15s;}
+  .doc-slot.loaded{border-color:rgba(46,204,113,0.4);background:rgba(46,204,113,0.04);}
+  .doc-slot-icon{font-size:24px;flex-shrink:0;}
+  .doc-slot-info{flex:1;}
+  .doc-slot-title{font-weight:700;font-size:14px;}
+  .doc-slot-sub{font-size:11px;color:var(--text2);margin-top:2px;}
+  .doc-slot-file{font-size:11px;color:var(--green);margin-top:3px;font-weight:600;}
+  .doc-slot-btn{padding:8px 14px;background:var(--surface2);border:1.5px solid var(--border2);border-radius:7px;font-family:var(--fh);font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;white-space:nowrap;}
+  .doc-slot.loaded .doc-slot-btn{background:var(--green-dim);border-color:var(--green);color:var(--green);}
+  @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
   .parse-section{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden;}
   .parse-sec-hdr{padding:10px 13px;background:var(--surface2);border-bottom:1px solid var(--border);font-family:var(--fh);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:space-between;}
   .parse-sec-body{padding:12px 13px;}
@@ -560,7 +570,7 @@ const COCO04P = {
      ]},
     {id:'labels_flav', name:'Labels & Flavours', col:'#e74c3c', type:'mixed',
      steps:[
-       {id:'l1',num:'12',desc:'Print batch labels. <strong>QA must check and sign off</strong> label. Attach to Label Check Sheet (TF Form PR 06).',type:'gate',gate:true,role:'qa'},
+       {id:'l1',num:'12',desc:'Print batch labels. <strong>AI Label Check</strong> required before sign-off. Take photo of printed label for verification.',type:'label_check',gate:true,role:'qa'},
        {id:'l2',num:'13',desc:'Allow <strong>5 min mixing</strong> after any additions before re-sampling',type:'setup_step'},
        {id:'l3',num:'14',desc:'Sample meets parameters, <strong>approved by Supervisor or R&D</strong>. Proceed.',type:'gate',gate:true,role:'supervisor'},
        {id:'l4',num:'15',desc:'Add <strong>FLAVOUR</strong> (ESCOCO04) \u2014 <strong>6.1 Kg</strong>. Rinse container with 1L water.',type:'ingredient',sign:true,inpLabel:'Actual weight added',inpUnit:'Kg',target:'6.1 Kg'},
@@ -651,6 +661,9 @@ async function initApp(){
       });
     }
   }catch(e){}
+
+  // Load API key from Firebase
+  await loadAPIKey();
 
   // Subscribe to live state changes so all devices stay in sync
   fbSubscribeState(remoteState=>{
@@ -1044,6 +1057,7 @@ function renderProduction(r,run){
         if(isActive){
           h+=`<div class="sactions">`;
           if(step.type==='qc') h+=renderQC(step,run);
+          else if(step.type==='label_check') h+=renderLabelCheck(step,run);
           else{
             if(step.inpLabel) h+=`<div class="inp-row"><input class="sinp" id="inp-${step.id}" placeholder="${step.inpLabel}" />${step.inpUnit?`<div class="iunit">${step.inpUnit}</div>`:''}</div>`;
           }
@@ -1288,7 +1302,23 @@ function renderAdmin(){
   RECIPES.forEach(r=>{
     h+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 13px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:7px;"><div><div style="font-weight:600;font-size:14px;">${r.name}</div><div style="font-family:var(--fm);font-size:11px;color:var(--text2);margin-top:2px;">${r.code} &middot; ${r.batchSize||'—'}</div></div><div style="font-size:11px;color:var(--text3);">${r.docRef||''}</div></div>`;
   });
-  h+=`<div class="divider"></div><div class="sec-hdr"><div class="sec-title">System</div></div><button class="btn-sm out" style="width:100%;padding:12px;margin-bottom:9px;" onclick="resetAll()">&#9888; Reset All Data</button><div style="font-size:11px;color:var(--text3);text-align:center;">v1.2 MVP \u2014 Tropico P-Plant</div>`;
+  const keyStored=S.apiKey?'&#9989; API Key configured':'&#9888; No API key set';
+  const keyColour=S.apiKey?'var(--green)':'var(--orange)';
+  h+=`<div class="divider"></div>
+  <div class="sec-hdr"><div class="sec-title">AI Settings</div></div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px;margin-bottom:9px;">
+    <div style="font-size:13px;font-weight:600;color:${keyColour};margin-bottom:8px;">${keyStored}</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Required for AI recipe parsing and label checking. Stored in Firebase — never in code.</div>
+    <div style="display:flex;gap:8px;">
+      <input class="fi" id="api-key-input" type="password" placeholder="sk-ant-api03-..." style="flex:1;font-family:var(--fm);font-size:12px;"/>
+      <button class="btn-sm" onclick="saveAPIKey()" style="white-space:nowrap;">Save Key</button>
+    </div>
+    ${S.apiKey?`<button class="btn-sm out" style="width:100%;margin-top:8px;padding:9px;color:var(--red);" onclick="clearAPIKey()">Clear API Key</button>`:''}
+  </div>
+  <div class="divider"></div>
+  <div class="sec-hdr"><div class="sec-title">System</div></div>
+  <button class="btn-sm out" style="width:100%;padding:12px;margin-bottom:9px;" onclick="resetAll()">&#9888; Reset All Data</button>
+  <div style="font-size:11px;color:var(--text3);text-align:center;">v1.2 MVP \u2014 Tropico P-Plant</div>`;
   document.getElementById('admin-body').innerHTML=h;
 }
 
@@ -1419,6 +1449,16 @@ function downloadBatchRecord(){
   @media print{body{margin:0;}button{display:none!important;}.page{padding:8mm;}}
 
   /* PARSER */
+  .doc-slot{display:flex;align-items:center;gap:12px;padding:13px;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);margin-bottom:9px;transition:all 0.15s;}
+  .doc-slot.loaded{border-color:rgba(46,204,113,0.4);background:rgba(46,204,113,0.04);}
+  .doc-slot-icon{font-size:24px;flex-shrink:0;}
+  .doc-slot-info{flex:1;}
+  .doc-slot-title{font-weight:700;font-size:14px;}
+  .doc-slot-sub{font-size:11px;color:var(--text2);margin-top:2px;}
+  .doc-slot-file{font-size:11px;color:var(--green);margin-top:3px;font-weight:600;}
+  .doc-slot-btn{padding:8px 14px;background:var(--surface2);border:1.5px solid var(--border2);border-radius:7px;font-family:var(--fh);font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;white-space:nowrap;}
+  .doc-slot.loaded .doc-slot-btn{background:var(--green-dim);border-color:var(--green);color:var(--green);}
+  @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
   .parse-section{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden;}
   .parse-sec-hdr{padding:10px 13px;background:var(--surface2);border-bottom:1px solid var(--border);font-family:var(--fh);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:space-between;}
   .parse-sec-body{padding:12px 13px;}
@@ -1549,28 +1589,55 @@ function downloadBatchRecord(){
       <div class="tbar-logo">RECIPE PARSER</div>
     </div>
   </div>
-  <div style="padding:16px;flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;">
+  <div style="padding:16px;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;">
 
-    <!-- STEP 1: Upload -->
+    <!-- STEP 1: Upload documents -->
     <div id="parser-step1">
-      <div style="font-family:var(--fh);font-size:22px;font-weight:700;margin-bottom:6px;">Load New Recipe</div>
-      <div style="font-size:13px;color:var(--text2);margin-bottom:20px;">Upload a Tropico Work Instruction PDF. The AI will extract the recipe structure for you to review before saving.</div>
+      <div style="font-family:var(--fh);font-size:22px;font-weight:700;margin-bottom:4px;">Load New Recipe</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:18px;">Upload the WI documents for this product. Upload one at a time or all three together — AI will work out what each one is.</div>
 
-      <div style="background:var(--surface);border:2px dashed var(--border2);border-radius:12px;padding:28px 20px;text-align:center;margin-bottom:16px;" id="drop-zone">
-        <div style="font-size:36px;margin-bottom:10px;">&#128196;</div>
-        <div style="font-family:var(--fh);font-size:18px;font-weight:700;margin-bottom:6px;">Select WI PDF</div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Clean digital PDF from your system — not a scan</div>
-        <label style="display:inline-block;padding:11px 22px;background:var(--accent);color:#000;font-family:var(--fh);font-size:15px;font-weight:700;border-radius:8px;cursor:pointer;">
-          Choose File
-          <input type="file" accept=".pdf,image/*" id="wi-file-input" style="display:none;" onchange="handleWIFile(this)"/>
-        </label>
+      <!-- Document slots -->
+      <div id="doc-slots">
+        <div class="doc-slot" id="slot-wi">
+          <div class="doc-slot-icon">&#128196;</div>
+          <div class="doc-slot-info">
+            <div class="doc-slot-title">Work Instruction</div>
+            <div class="doc-slot-sub">Mixing steps, HIPEX settings, packing</div>
+          </div>
+          <label class="doc-slot-btn">
+            Add<input type="file" accept=".pdf,image/*" style="display:none;" onchange="addDoc('wi',this)"/>
+          </label>
+        </div>
+        <div class="doc-slot" id="slot-picklist">
+          <div class="doc-slot-icon">&#128203;</div>
+          <div class="doc-slot-info">
+            <div class="doc-slot-title">Work Order Picklist</div>
+            <div class="doc-slot-sub">Ingredient codes, quantities, units</div>
+          </div>
+          <label class="doc-slot-btn">
+            Add<input type="file" accept=".pdf,image/*" style="display:none;" onchange="addDoc('picklist',this)"/>
+          </label>
+        </div>
+        <div class="doc-slot" id="slot-qc">
+          <div class="doc-slot-icon">&#129514;</div>
+          <div class="doc-slot-info">
+            <div class="doc-slot-title">QC In-Line Test Sheet</div>
+            <div class="doc-slot-sub">Brix, pH, viscosity specs</div>
+          </div>
+          <label class="doc-slot-btn">
+            Add<input type="file" accept=".pdf,image/*" style="display:none;" onchange="addDoc('qc',this)"/>
+          </label>
+        </div>
       </div>
-      <div id="parser-file-name" style="font-size:13px;color:var(--text2);text-align:center;margin-bottom:16px;display:none;"></div>
-      <button class="btn-primary" id="parser-parse-btn" onclick="parseWI()" disabled style="font-size:16px;padding:14px;">&#129302; Parse with AI</button>
-      <div id="parser-loading" style="display:none;text-align:center;padding:30px;">
-        <div style="font-size:30px;margin-bottom:12px;">&#9881;</div>
-        <div style="font-family:var(--fh);font-size:18px;font-weight:700;color:var(--accent);">Parsing Work Instruction...</div>
-        <div style="font-size:13px;color:var(--text2);margin-top:6px;">AI is reading the PDF and extracting recipe structure</div>
+
+      <div id="parser-docs-loaded" style="display:none;margin:14px 0;padding:10px 13px;background:var(--green-dim);border:1px solid rgba(46,204,113,0.3);border-radius:8px;font-size:13px;color:var(--green);font-weight:600;"></div>
+
+      <button class="btn-primary" id="parser-parse-btn" onclick="parseAllDocs()" disabled style="font-size:16px;padding:14px;margin-top:4px;">&#129302; Parse with AI</button>
+
+      <div id="parser-loading" style="display:none;text-align:center;padding:30px 20px;">
+        <div style="font-size:30px;margin-bottom:12px;animation:spin 1.5s linear infinite;display:inline-block;">&#9881;</div>
+        <div style="font-family:var(--fh);font-size:18px;font-weight:700;color:var(--accent);">Parsing Documents...</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:6px;" id="parser-loading-sub">AI is reading your documents</div>
       </div>
       <div id="parser-error" class="err-box" style="margin-top:12px;"></div>
     </div>
@@ -1578,9 +1645,9 @@ function downloadBatchRecord(){
     <!-- STEP 2: Review & Confirm -->
     <div id="parser-step2" style="display:none;">
       <div style="font-family:var(--fh);font-size:22px;font-weight:700;margin-bottom:4px;">Review Parsed Recipe</div>
-      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Check all details before saving. Edit anything that doesn&apos;t look right.</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Check all details before saving. Edit anything that looks wrong.</div>
       <div id="parser-preview"></div>
-      <div style="display:flex;gap:10px;margin-top:16px;padding-bottom:30px;">
+      <div style="display:flex;gap:10px;margin-top:16px;padding-bottom:40px;">
         <button class="btn-cancel" onclick="parserReset()" style="flex:1;">Start Over</button>
         <button class="btn-primary" onclick="saveRecipe()" style="flex:2;font-size:15px;padding:14px;">&#10003; Save Recipe</button>
       </div>
@@ -1604,10 +1671,43 @@ function downloadBatchRecord(){
   toast('Batch record downloaded','success');
 }
 
-// ─── WI PARSER ───────────────────────────────────
+// ─── API KEY MANAGEMENT ──────────────────────────
+async function saveAPIKey(){
+  const inp=document.getElementById('api-key-input');
+  if(!inp||!inp.value.trim()){toast('Enter an API key','error');return;}
+  const key=inp.value.trim();
+  if(!key.startsWith('sk-ant-')){toast('Invalid key format','error');return;}
+  S.apiKey=key;
+  // Save to Firebase under a protected path
+  await fbSave('config','apikey',{key});
+  save();
+  renderAdmin();
+  toast('API key saved','success');
+}
+
+async function loadAPIKey(){
+  try{
+    const d=await fbLoad('config','apikey');
+    if(d&&d.key){S.apiKey=d.key;}
+  }catch(e){}
+}
+
+function clearAPIKey(){
+  if(!confirm('Remove API key?'))return;
+  S.apiKey=null;
+  fbSave('config','apikey',{key:''});
+  save();
+  renderAdmin();
+  toast('API key cleared','success');
+}
+
+function getAPIKey(){
+  return S.apiKey||null;
+}
+
+// ─── WI PARSER (MULTI-DOC) ───────────────────────
 let parsedRecipe = null;
-let wiFileData = null;
-let wiFileType = null;
+const loadedDocs = {}; // {wi:{data,type,name}, picklist:{...}, qc:{...}}
 
 function showParser(){
   if(!['admin','pd'].includes(S.user.role)){toast('PD or Admin only','error');return;}
@@ -1621,42 +1721,85 @@ function parserReset(){
   document.getElementById('parser-loading').style.display='none';
   document.getElementById('parser-error').classList.remove('show');
   document.getElementById('parser-parse-btn').disabled=true;
-  document.getElementById('parser-file-name').style.display='none';
-  document.getElementById('wi-file-input').value='';
-  parsedRecipe=null;wiFileData=null;wiFileType=null;
+  document.getElementById('parser-docs-loaded').style.display='none';
+  // Reset all slots
+  ['wi','picklist','qc'].forEach(k=>{
+    delete loadedDocs[k];
+    const slot=document.getElementById('slot-'+k);
+    if(slot){
+      slot.classList.remove('loaded');
+      const fileDiv=slot.querySelector('.doc-slot-file');
+      if(fileDiv)fileDiv.remove();
+      const btn=slot.querySelector('.doc-slot-btn');
+      if(btn)btn.textContent='Add';
+    }
+  });
+  parsedRecipe=null;
 }
 
-function handleWIFile(input){
+function addDoc(type, input){
   const file=input.files[0];if(!file)return;
-  wiFileType=file.type;
   const reader=new FileReader();
   reader.onload=e=>{
-    wiFileData=e.target.result.split(',')[1]; // base64 only
-    document.getElementById('parser-file-name').textContent='File loaded: '+file.name;
-    document.getElementById('parser-file-name').style.display='block';
-    document.getElementById('parser-parse-btn').disabled=false;
+    loadedDocs[type]={data:e.target.result.split(',')[1], mtype:file.type, name:file.name};
+    // Update slot UI
+    const slot=document.getElementById('slot-'+type);
+    slot.classList.add('loaded');
+    const btn=slot.querySelector('.doc-slot-btn');
+    if(btn)btn.textContent='✓ Loaded';
+    // Add filename
+    let fileDiv=slot.querySelector('.doc-slot-file');
+    if(!fileDiv){fileDiv=document.createElement('div');fileDiv.className='doc-slot-file';slot.querySelector('.doc-slot-info').appendChild(fileDiv);}
+    fileDiv.textContent=file.name;
+    updateParserBtn();
   };
   reader.readAsDataURL(file);
 }
 
-async function parseWI(){
-  if(!wiFileData){toast('No file loaded','error');return;}
+function updateParserBtn(){
+  const count=Object.keys(loadedDocs).length;
+  const btn=document.getElementById('parser-parse-btn');
+  const loaded=document.getElementById('parser-docs-loaded');
+  btn.disabled=count===0;
+  if(count>0){
+    const names=Object.keys(loadedDocs).map(k=>({wi:'Work Instruction',picklist:'Picklist',qc:'QC Sheet'}[k]));
+    loaded.textContent=count+' document'+(count>1?'s':'')+' ready: '+names.join(', ');
+    loaded.style.display='block';
+    btn.textContent='🤖 Parse '+count+' Document'+(count>1?'s':'')+' with AI';
+  }
+}
+
+async function parseAllDocs(){
+  const count=Object.keys(loadedDocs).length;
+  if(count===0){toast('Add at least one document','error');return;}
+
   document.getElementById('parser-loading').style.display='block';
   document.getElementById('parser-parse-btn').style.display='none';
   document.getElementById('parser-error').classList.remove('show');
 
-  const systemPrompt = `You are a food manufacturing recipe parser for Tropico Fruits Pty Ltd.
-Extract recipe data from a Work Instruction PDF and return ONLY valid JSON, no markdown, no explanation.
+  const subEl=document.getElementById('parser-loading-sub');
+  if(subEl)subEl.textContent='Reading '+count+' document'+(count>1?'s':'')+' — this takes about 15 seconds';
+
+  const systemPrompt=`You are a food manufacturing recipe parser for Tropico Fruits Pty Ltd.
+You will receive 1-3 documents: a Work Instruction (WI), a Work Order Picklist, and/or a QC In-Line Test sheet.
+Extract all recipe data and return ONLY valid JSON with no markdown, no explanation, no code fences.
 
 Return this exact structure:
 {
   "name": "Product name",
   "code": "Product code e.g. COCO04P",
   "batchSize": "e.g. 1000 Kg",
-  "docRef": "Doc number and version",
+  "docRef": "Doc number and version from WI header",
   "batchIngredients": [
-    {"id":"bi1","code":"ITEM_CODE","name":"Full ingredient name","qty":"amount as number string","unit":"Kg or L","desc":"qty + unit + any notes"}
+    {"id":"bi1","code":"ITEM_CODE","name":"Full ingredient name","qty":"quantity as number string","unit":"Kg or L","desc":"qty + unit + packaging notes"}
   ],
+  "qcSpecs": {
+    "brix": {"spec":"43-48","min":43,"max":48},
+    "acid": {"spec":"Record only","min":null,"max":null},
+    "ph": {"spec":"3.75-4","min":3.75,"max":4},
+    "viscosity": {"spec":"5-8","min":5,"max":8},
+    "colour": {"spec":"description","min":null,"max":null}
+  },
   "sections": [
     {
       "id": "setup",
@@ -1664,80 +1807,85 @@ Return this exact structure:
       "col": "#3498db",
       "type": "setup",
       "steps": [
-        {"id":"s1","num":"S1","desc":"Step description with HTML bold tags for key values e.g. Set <strong>Kettle</strong> to <strong>60°C</strong>"}
-      ]
-    },
-    {
-      "id": "mix",
-      "name": "Batch Mixing",
-      "col": "#f39c12",
-      "type": "mixed",
-      "steps": [
-        {"id":"m1","num":"1","desc":"Step desc","type":"ingredient","sign":true,"inpLabel":"Actual weight added","inpUnit":"Kg","target":"expected value"}
+        {"id":"s1","num":"S1","desc":"Step with <strong>key values</strong> bolded"}
       ]
     }
   ]
 }
 
-Rules:
-- batchIngredients: ONLY dry/wet ingredients that batching team physically weighs out. NO water, NO packaging (bags, labels, bins, intercon).
-- sections must include: setup (machine setup), mix (numbered mixing steps), qc (QC testing), labels_flav (labels and flavours), hipex (HIPEX checks and transfer), pack (packing and samples)
-- For the qc section use type:"single" and include a step with type:"qc" and id:"qc1"
-- For setup sections use type:"setup"
-- step types: "ingredient" (adding something to kettle/instantiser), "temp" (temperature check), "setup_step" (general setup), "qc_trigger" (take sample), "gate" (approval needed), "qc" (QC test form)
-- For gate steps add: "gate":true and "role":"qa" or "role":"supervisor" as appropriate
-- For ingredient steps add: "sign":true, "inpLabel":"Actual weight/volume added", "inpUnit":"Kg" or "L", "target":"expected qty and notes"
-- For temp steps add: "sign":true, "type":"temp", "inpLabel":"Temperature recorded", "inpUnit":"°C", "target":"target range"
-- Keep HIPEX section with all HIPEX checks as a setup section
-- QC fields for qc1 step must include: brix, acid, ph, viscosity, colour with their specs from the WI
-- Preserve all specific values: temperatures, speeds, volumes, times
-- Use <strong> tags around key values and ingredient names in desc fields
-- IDs must be unique: s1,s2... for setup; m1,m2... for mixing; qc1 for QC; l1,l2... for labels; h1,h2... for hipex; p1,p2... for packing`;
+CRITICAL RULES:
+- batchIngredients: ONLY ingredients the batching team physically weighs. NO town water, NO packaging (bags, labels, bins, intercon, aseptic bags). These are production-only items.
+- If you have the Picklist document, use it for exact ingredient codes, quantities and units
+- If you have the QC sheet, extract the exact specs (Brix range, pH range, viscosity range, colour description)
+- sections must include in order: setup, mix, qc, labels_flav, hipex, pack
+- setup sections use type:"setup" — all steps ticked then one PIN sign-off for the section
+- mixed sections use type:"mixed" — each ingredient step requires individual PIN
+- For ingredient steps: "type":"ingredient","sign":true,"inpLabel":"Actual weight/volume added","inpUnit":"Kg" or "L","target":"expected qty"
+- For temperature steps: "type":"temp","sign":true,"inpLabel":"Temperature recorded","inpUnit":"°C","target":"target range"  
+- For gate steps: "gate":true,"role":"qa" or "role":"supervisor"
+- For QC step: id must be "qc1", type:"qc", include qcFields array with keys: brix,acid,ph,visc,colour
+- Step IDs: s1,s2 for setup; m1,m2 for mixing; qc1 for QC; l1,l2 for labels; h1,h2 for hipex; p1,p2 for packing
+- Use <strong> tags around ingredient names and key values in desc fields
+- Preserve all specific values from documents: temperatures, speeds, volumes, percentages, times`;
 
-  const userMsg = `Parse this Tropico Work Instruction and extract the complete recipe structure as JSON.`;
+  try{
+    // Build content array with all loaded docs
+    const msgContent=[];
+    const docLabels={wi:'WORK INSTRUCTION',picklist:'WORK ORDER PICKLIST',qc:'QC IN-LINE TEST SHEET'};
+    
+    Object.entries(loadedDocs).forEach(([type,doc])=>{
+      msgContent.push({type:'text',text:`--- ${docLabels[type]} ---`});
+      const blockType=doc.mtype==='application/pdf'?'document':'image';
+      msgContent.push({
+        type:blockType,
+        source:{type:'base64',media_type:doc.mtype,data:doc.data}
+      });
+    });
+    msgContent.push({type:'text',text:'Parse all the above documents and return the complete recipe JSON.'});
 
-  try {
-    const mediaType = wiFileType === 'application/pdf' ? 'application/pdf' : wiFileType;
-    const contentArr = [
-      {
-        type: wiFileType === 'application/pdf' ? 'document' : 'image',
-        source: {
-          type: 'base64',
-          media_type: mediaType,
-          data: wiFileData
-        }
-      },
-      {type:'text', text: userMsg}
-    ];
-
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const apiKey=getAPIKey();
+    if(!apiKey){throw new Error('No API key configured. Go to Admin → AI Settings to add your Claude API key.');}
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
+      body:JSON.stringify({
         model:'claude-sonnet-4-20250514',
-        max_tokens:4000,
-        system: systemPrompt,
-        messages:[{role:'user', content: contentArr}]
+        max_tokens:6000,
+        system:systemPrompt,
+        messages:[{role:'user',content:msgContent}]
       })
     });
 
-    if(!resp.ok){
-      const err=await resp.text();
-      throw new Error('API error '+resp.status+': '+err);
+    if(!resp.ok){const err=await resp.text();throw new Error('API '+resp.status+': '+err);}
+    const data=await resp.json();
+    const raw=data.content.map(c=>c.text||'').join('');
+    const clean=raw.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+    parsedRecipe=JSON.parse(clean);
+
+    // Ensure required fields
+    parsedRecipe.id=parsedRecipe.code||('recipe_'+Date.now());
+
+    // Merge qcSpecs into qc1 step if present
+    if(parsedRecipe.qcSpecs){
+      parsedRecipe.sections.forEach(sec=>{
+        sec.steps.forEach(step=>{
+          if(step.id==='qc1'&&parsedRecipe.qcSpecs){
+            const qs=parsedRecipe.qcSpecs;
+            step.qcFields=[
+              {key:'brix',label:'BRIX',spec:qs.brix?.spec||'43-48',min:qs.brix?.min||43,max:qs.brix?.max||48},
+              {key:'acid',label:'ACID',spec:qs.acid?.spec||'Record only',min:null,max:null},
+              {key:'ph',label:'pH',spec:qs.ph?.spec||'3.75-4',min:qs.ph?.min||3.75,max:qs.ph?.max||4},
+              {key:'visc',label:'Viscosity',spec:qs.viscosity?.spec||'5-8',min:qs.viscosity?.min||5,max:qs.viscosity?.max||8},
+              {key:'colour',label:'Colour',spec:qs.colour?.spec||'Record',min:null,max:null},
+            ];
+          }
+        });
+      });
     }
 
-    const data = await resp.json();
-    const raw = data.content.map(c=>c.text||'').join('');
-    // Strip any markdown code fences
-    const clean = raw.replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-    parsedRecipe = JSON.parse(clean);
-
-    // Assign runtime IDs if missing
-    parsedRecipe.id = parsedRecipe.code || ('recipe_'+Date.now());
+    // Ensure all step IDs unique
     parsedRecipe.sections.forEach(sec=>{
-      sec.steps.forEach((step,i)=>{
-        if(!step.id) step.id = sec.id+'_'+i;
-      });
+      sec.steps.forEach((step,i)=>{if(!step.id)step.id=sec.id+'_'+i;});
     });
 
     document.getElementById('parser-loading').style.display='none';
@@ -1745,11 +1893,11 @@ Rules:
     document.getElementById('parser-step2').style.display='block';
     renderParserPreview();
 
-  } catch(err){
+  }catch(err){
     document.getElementById('parser-loading').style.display='none';
     document.getElementById('parser-parse-btn').style.display='block';
     const errEl=document.getElementById('parser-error');
-    errEl.textContent='Parse failed: '+err.message+'. Check the file is a clean digital PDF and try again.';
+    errEl.textContent='Parse failed: '+err.message;
     errEl.classList.add('show');
     console.error(err);
   }
@@ -1759,49 +1907,41 @@ function renderParserPreview(){
   if(!parsedRecipe)return;
   const r=parsedRecipe;
   let h='';
-
-  // Header fields
   h+=`<div class="parse-section"><div class="parse-sec-hdr">Product Details</div><div class="parse-sec-body">`;
   h+=`<div class="parse-field"><label>Product Name</label><input class="parse-input" value="${r.name||''}" oninput="parsedRecipe.name=this.value"/></div>`;
   h+=`<div class="parse-field"><label>Product Code</label><input class="parse-input" value="${r.code||''}" oninput="parsedRecipe.code=this.value;parsedRecipe.id=this.value"/></div>`;
   h+=`<div class="parse-field"><label>Batch Size</label><input class="parse-input" value="${r.batchSize||''}" oninput="parsedRecipe.batchSize=this.value"/></div>`;
   h+=`<div class="parse-field"><label>Doc Reference</label><input class="parse-input" value="${r.docRef||''}" oninput="parsedRecipe.docRef=this.value"/></div>`;
+  h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;">`;
+  h+=`<div class="parse-field"><label>Shelf Life (months)</label><input class="parse-input" type="number" value="${r.shelfLifeMonths||''}" placeholder="e.g. 9" oninput="parsedRecipe.shelfLifeMonths=this.value"/></div>`;
+  h+=`<div class="parse-field"><label>Storage</label><select class="parse-input" onchange="parsedRecipe.storage=this.value">`;
+  h+=`<option ${(r.storage||'')==='Refrigerated'?'selected':''}>Refrigerated</option>`;
+  h+=`<option ${(r.storage||'')==='Ambient'?'selected':''}>Ambient</option>`;
+  h+=`<option ${(r.storage||'')==='Frozen'?'selected':''}>Frozen</option>`;
+  h+=`</select></div></div>`;
   h+=`</div></div>`;
-
   // Batch ingredients
-  h+=`<div class="parse-section"><div class="parse-sec-hdr"><span>Batch Ingredients (Batching Team)</span><span style="font-size:11px;color:var(--text2);">Dry/wet ingredients only — no water or packaging</span></div><div class="parse-sec-body">`;
+  h+=`<div class="parse-section"><div class="parse-sec-hdr"><span>Batch Ingredients</span></div><div class="parse-sec-body">`;
   h+=`<div class="ing-hdr"><div>Code</div><div>Name</div><div>Qty</div><div>Unit</div></div>`;
   (r.batchIngredients||[]).forEach((bi,i)=>{
-    h+=`<div class="ing-row">
-      <input value="${bi.code||''}" placeholder="Item code" oninput="parsedRecipe.batchIngredients[${i}].code=this.value"/>
-      <input value="${bi.name||''}" placeholder="Ingredient name" oninput="parsedRecipe.batchIngredients[${i}].name=this.value"/>
-      <input value="${bi.qty||''}" placeholder="Qty" oninput="parsedRecipe.batchIngredients[${i}].qty=this.value"/>
-      <input value="${bi.unit||''}" placeholder="Unit" oninput="parsedRecipe.batchIngredients[${i}].unit=this.value"/>
-    </div>`;
+    h+=`<div class="ing-row">`;
+    h+=`<input value="${bi.code||''}" placeholder="Code" oninput="parsedRecipe.batchIngredients[${i}].code=this.value"/>`;
+    h+=`<input value="${bi.name||''}" placeholder="Name" oninput="parsedRecipe.batchIngredients[${i}].name=this.value"/>`;
+    h+=`<input value="${bi.qty||''}" placeholder="Qty" oninput="parsedRecipe.batchIngredients[${i}].qty=this.value"/>`;
+    h+=`<input value="${bi.unit||''}" placeholder="Unit" oninput="parsedRecipe.batchIngredients[${i}].unit=this.value"/>`;
+    h+=`</div>`;
   });
   h+=`<button class="btn-sm out" style="margin-top:8px;width:100%;padding:9px;" onclick="addParsedIngredient()">+ Add Ingredient</button>`;
   h+=`</div></div>`;
-
-  // Sections and steps
+  // Sections
   (r.sections||[]).forEach((sec,si)=>{
-    const typeLabel={setup:'Setup Section',mixed:'Mixed',single:'Single Step'}[sec.type]||sec.type;
-    h+=`<div class="parse-section"><div class="parse-sec-hdr" style="border-left:3px solid ${sec.col||'var(--accent)'};">`;
-    h+=`<input value="${sec.name||''}" oninput="parsedRecipe.sections[${si}].name=this.value" style="background:transparent;border:none;outline:none;color:var(--text);font-family:var(--fh);font-size:14px;font-weight:700;flex:1;"/>`;
-    h+=`<span style="font-size:10px;color:var(--text3);margin-left:8px;">${typeLabel} &middot; ${sec.steps.length} steps</span>`;
-    h+=`</div><div class="parse-sec-body">`;
+    h+=`<div class="parse-section"><div class="parse-sec-hdr" style="border-left:3px solid ${sec.col||'var(--accent)'};"><input value="${sec.name||''}" oninput="parsedRecipe.sections[${si}].name=this.value" style="background:transparent;border:none;outline:none;color:var(--text);font-family:var(--fh);font-size:14px;font-weight:700;flex:1;"/><span style="font-size:10px;color:var(--text3);margin-left:8px;">${sec.steps.length} steps</span></div><div class="parse-sec-body">`;
     sec.steps.forEach((step,sti)=>{
-      const typeTag = step.type==='ingredient'?'<span class="parse-tag ptag-ing">Ingredient</span>':step.type==='temp'?'<span class="parse-tag ptag-temp">Temp</span>':step.gate?'<span class="parse-tag ptag-gate">Gate</span>':'<span class="parse-tag ptag-setup">Setup</span>';
-      h+=`<div class="parse-step-row">
-        <div class="parse-step-num">${step.num||sti+1}</div>
-        <div style="flex:1;">
-          <textarea class="parse-step-desc" oninput="parsedRecipe.sections[${si}].steps[${sti}].desc=this.value">${(step.desc||'').replace(/<[^>]*>/g,'')}</textarea>
-          <div style="margin-top:3px;">${typeTag}${step.target?`<span style="font-size:11px;color:var(--teal);margin-left:6px;">&#127919; ${step.target}</span>`:''}</div>
-        </div>
-      </div>`;
+      const tag=step.type==='ingredient'?'<span class="parse-tag ptag-ing">Ingredient</span>':step.gate?'<span class="parse-tag ptag-gate">Gate</span>':'<span class="parse-tag ptag-setup">Setup</span>';
+      h+=`<div class="parse-step-row"><div class="parse-step-num">${step.num||sti+1}</div><div style="flex:1;"><textarea class="parse-step-desc" oninput="parsedRecipe.sections[${si}].steps[${sti}].desc=this.value">${(step.desc||'').replace(/<[^>]*>/g,'')}</textarea><div style="margin-top:3px;">${tag}</div></div></div>`;
     });
     h+=`</div></div>`;
   });
-
   document.getElementById('parser-preview').innerHTML=h;
 }
 
@@ -1810,10 +1950,7 @@ function addParsedIngredient(){
   const i=parsedRecipe.batchIngredients.length;
   parsedRecipe.batchIngredients.push({id:'bi'+(i+1),code:'',name:'',qty:'',unit:'Kg',desc:''});
   renderParserPreview();
-  setTimeout(()=>{
-    const rows=document.querySelectorAll('.ing-row');
-    if(rows.length)rows[rows.length-1].querySelector('input').focus();
-  },100);
+  setTimeout(()=>{const rows=document.querySelectorAll('.ing-row');if(rows.length)rows[rows.length-1].querySelector('input').focus();},100);
 }
 
 function saveRecipe(){
@@ -1834,6 +1971,118 @@ function saveRecipe(){
   parserReset();
   showScreen('screen-admin');renderAdmin();
 }
+
+// ─── LABEL CHECKER ───────────────────────────────
+function renderLabelCheck(step,run){
+  const lc=run.labelCheck||{};
+  const r=RECIPES.find(x=>x.id===curWO.recipeId);
+  let h=`<div style="font-size:12px;color:var(--text2);margin-bottom:9px;font-weight:600;">AI LABEL VERIFICATION — ${curWO.num} Batch #${curWO.batchNum}</div>`;
+  h+=`<div style="font-size:11px;color:var(--text2);margin-bottom:10px;padding:7px 10px;background:var(--surface3);border-radius:7px;">
+    Checking against: <strong>${r.name}</strong> | Code: <strong>${r.code}</strong> | Batch: <strong>#${curWO.batchNum}</strong> | Weight: <strong>${r.batchSize}</strong> | Storage: <strong>${r.storage||'Refrigerated'}</strong>
+  </div>`;
+  h+=`<div class="photo-row">
+    <label class="btn-photo ${lc.photoData?'ok':''}" for="lc-file">
+      ${lc.photoData?'\u2713 Photo captured — tap to retake':'\uD83D\uDCF7 Take photo of printed label'}
+    </label>
+    <input class="pfile" type="file" accept="image/*" capture="environment" id="lc-file" onchange="handleLabelPhoto(this)"/>
+    ${lc.photoData?`<img src="${lc.photoData}" style="width:56px;height:56px;border-radius:6px;object-fit:cover;border:1px solid var(--border2);"/>`:''}
+  </div>`;
+  if(lc.result){
+    const pass=lc.result.pass;
+    h+=`<div style="background:${pass?'var(--green-dim)':'var(--red-dim)'};border:1px solid ${pass?'rgba(46,204,113,0.3)':'rgba(231,76,60,0.3)'};border-radius:8px;padding:11px 13px;margin-bottom:9px;">
+      <div style="font-weight:700;font-size:14px;color:${pass?'var(--green)':'var(--red)'};">${pass?'\u2705 LABEL APPROVED':'\u274C ISSUES FOUND — Do not pack'}</div>
+      <div style="font-size:12px;margin-top:7px;line-height:1.7;white-space:pre-line;">${lc.result.details}</div>
+    </div>`;
+    if(!pass) h+=`<button class="bsign" style="background:var(--surface3);color:var(--text);margin-bottom:8px;" onclick="recheckLabel()">\uD83D\uDCF7 Retake &amp; Re-check</button>`;
+  }
+  if(lc.photoData&&!lc.result){
+    h+=`<button class="bsign" style="background:var(--purple);color:#fff;margin-bottom:8px;" onclick="checkLabel()">\uD83E\uDD16 Check Label with AI</button>`;
+  } else if(lc.photoData&&lc.result&&!lc.result.pass){
+    h+=`<button class="bsign" style="background:var(--purple);color:#fff;margin-bottom:8px;" onclick="checkLabel()">\uD83E\uDD16 Re-check</button>`;
+  }
+  return h;
+}
+
+function handleLabelPhoto(input){
+  const file=input.files[0];if(!file)return;
+  const rd=new FileReader();
+  rd.onload=e=>{
+    const run=S.batchRuns[curWO.id];
+    if(!run.labelCheck)run.labelCheck={};
+    run.labelCheck.photoData=e.target.result;
+    run.labelCheck.result=null;
+    saveBatchRun(curWO.id);
+    renderRun();
+  };
+  rd.readAsDataURL(file);
+}
+
+function recheckLabel(){
+  const run=S.batchRuns[curWO.id];
+  if(run.labelCheck){run.labelCheck.result=null;run.labelCheck.photoData=null;}
+  saveBatchRun(curWO.id);renderRun();
+}
+
+async function checkLabel(){
+  const run=S.batchRuns[curWO.id];
+  if(!run.labelCheck||!run.labelCheck.photoData){toast('Take a photo first','error');return;}
+  const apiKey=getAPIKey();
+  if(!apiKey){toast('No API key — go to Admin > AI Settings','error');return;}
+  const btn=document.querySelector('[onclick="checkLabel()"]');
+  if(btn){btn.textContent='Checking...';btn.disabled=true;}
+  const r=RECIPES.find(x=>x.id===curWO.recipeId);
+  const wo=curWO;
+  const domDate=new Date(wo.productDate);
+  const domStr=domDate.toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'2-digit'}).replace(/ /g,'-');
+  const lotExpected=wo.productDate.replace(/-/g,'').substring(2)+'-'+wo.batchNum;
+  let bbdStr=r.shelfLifeMonths?'':'unknown — verify manually';
+  if(r.shelfLifeMonths){
+    const bbd=new Date(domDate);bbd.setMonth(bbd.getMonth()+parseInt(r.shelfLifeMonths));
+    bbdStr=bbd.toLocaleDateString('en-AU',{day:'numeric',month:'numeric',year:'numeric'});
+  }
+  const imgData=run.labelCheck.photoData.split(',')[1];
+  const mtype=run.labelCheck.photoData.split(';')[0].split(':')[1];
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:800,
+        system:'You are a food safety label checker for Tropico Fruits Pty Ltd. Check the label photo against expected values and return ONLY valid JSON with no markdown. Format: {"pass":true/false,"details":"list each check on its own line starting with ✓ or ✗"}',
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:mtype,data:imgData}},
+          {type:'text',text:`Check this label against:
+- Product Code: ${r.code}
+- Product Name: ${r.name}
+- Batch No: ${wo.batchNum}
+- DOM: ${domStr}
+- Lot: should contain ${lotExpected}
+- Weight: ${r.batchSize}
+- Storage: ${r.storage||'Refrigerated'}
+- BBD: ${bbdStr}
+- Company: Tropico Fruits Pty Ltd, 36 Central Park Drive, Yandina QLD 4561
+Mark PASS only if code, name, batch, DOM and weight are all correct.`}
+        ]}]
+      })
+    });
+    if(!resp.ok){const e=await resp.text();throw new Error('API '+resp.status+': '+e);}
+    const data=await resp.json();
+    const raw=data.content.map(c=>c.text||'').join('');
+    const clean=raw.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+    const result=JSON.parse(clean);
+    run.labelCheck.result=result;
+    run.labelCheck.checkedAt=new Date().toISOString();
+    run.labelCheck.checkedBy=S.user.name;
+    run.auditLog.push({type:'label_check',stepNum:'12',opName:S.user.name,opRole:S.user.role,ts:new Date().toISOString(),val:result.pass?'LABEL PASS':'LABEL FAIL'});
+    saveBatchRun(curWO.id);
+    renderRun();
+  }catch(err){
+    toast('Label check failed: '+err.message,'error');
+    if(btn){btn.textContent='\uD83E\uDD16 Check Label with AI';btn.disabled=false;}
+    console.error(err);
+  }
+}
 </script>
 
 <!-- RECIPE PARSER SCREEN -->
@@ -1844,28 +2093,55 @@ function saveRecipe(){
       <div class="tbar-logo">RECIPE PARSER</div>
     </div>
   </div>
-  <div style="padding:16px;flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;">
+  <div style="padding:16px;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;">
 
-    <!-- STEP 1: Upload -->
+    <!-- STEP 1: Upload documents -->
     <div id="parser-step1">
-      <div style="font-family:var(--fh);font-size:22px;font-weight:700;margin-bottom:6px;">Load New Recipe</div>
-      <div style="font-size:13px;color:var(--text2);margin-bottom:20px;">Upload a Tropico Work Instruction PDF. The AI will extract the recipe structure for you to review before saving.</div>
+      <div style="font-family:var(--fh);font-size:22px;font-weight:700;margin-bottom:4px;">Load New Recipe</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:18px;">Upload the WI documents for this product. Upload one at a time or all three together — AI will work out what each one is.</div>
 
-      <div style="background:var(--surface);border:2px dashed var(--border2);border-radius:12px;padding:28px 20px;text-align:center;margin-bottom:16px;" id="drop-zone">
-        <div style="font-size:36px;margin-bottom:10px;">&#128196;</div>
-        <div style="font-family:var(--fh);font-size:18px;font-weight:700;margin-bottom:6px;">Select WI PDF</div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Clean digital PDF from your system — not a scan</div>
-        <label style="display:inline-block;padding:11px 22px;background:var(--accent);color:#000;font-family:var(--fh);font-size:15px;font-weight:700;border-radius:8px;cursor:pointer;">
-          Choose File
-          <input type="file" accept=".pdf,image/*" id="wi-file-input" style="display:none;" onchange="handleWIFile(this)"/>
-        </label>
+      <!-- Document slots -->
+      <div id="doc-slots">
+        <div class="doc-slot" id="slot-wi">
+          <div class="doc-slot-icon">&#128196;</div>
+          <div class="doc-slot-info">
+            <div class="doc-slot-title">Work Instruction</div>
+            <div class="doc-slot-sub">Mixing steps, HIPEX settings, packing</div>
+          </div>
+          <label class="doc-slot-btn">
+            Add<input type="file" accept=".pdf,image/*" style="display:none;" onchange="addDoc('wi',this)"/>
+          </label>
+        </div>
+        <div class="doc-slot" id="slot-picklist">
+          <div class="doc-slot-icon">&#128203;</div>
+          <div class="doc-slot-info">
+            <div class="doc-slot-title">Work Order Picklist</div>
+            <div class="doc-slot-sub">Ingredient codes, quantities, units</div>
+          </div>
+          <label class="doc-slot-btn">
+            Add<input type="file" accept=".pdf,image/*" style="display:none;" onchange="addDoc('picklist',this)"/>
+          </label>
+        </div>
+        <div class="doc-slot" id="slot-qc">
+          <div class="doc-slot-icon">&#129514;</div>
+          <div class="doc-slot-info">
+            <div class="doc-slot-title">QC In-Line Test Sheet</div>
+            <div class="doc-slot-sub">Brix, pH, viscosity specs</div>
+          </div>
+          <label class="doc-slot-btn">
+            Add<input type="file" accept=".pdf,image/*" style="display:none;" onchange="addDoc('qc',this)"/>
+          </label>
+        </div>
       </div>
-      <div id="parser-file-name" style="font-size:13px;color:var(--text2);text-align:center;margin-bottom:16px;display:none;"></div>
-      <button class="btn-primary" id="parser-parse-btn" onclick="parseWI()" disabled style="font-size:16px;padding:14px;">&#129302; Parse with AI</button>
-      <div id="parser-loading" style="display:none;text-align:center;padding:30px;">
-        <div style="font-size:30px;margin-bottom:12px;">&#9881;</div>
-        <div style="font-family:var(--fh);font-size:18px;font-weight:700;color:var(--accent);">Parsing Work Instruction...</div>
-        <div style="font-size:13px;color:var(--text2);margin-top:6px;">AI is reading the PDF and extracting recipe structure</div>
+
+      <div id="parser-docs-loaded" style="display:none;margin:14px 0;padding:10px 13px;background:var(--green-dim);border:1px solid rgba(46,204,113,0.3);border-radius:8px;font-size:13px;color:var(--green);font-weight:600;"></div>
+
+      <button class="btn-primary" id="parser-parse-btn" onclick="parseAllDocs()" disabled style="font-size:16px;padding:14px;margin-top:4px;">&#129302; Parse with AI</button>
+
+      <div id="parser-loading" style="display:none;text-align:center;padding:30px 20px;">
+        <div style="font-size:30px;margin-bottom:12px;animation:spin 1.5s linear infinite;display:inline-block;">&#9881;</div>
+        <div style="font-family:var(--fh);font-size:18px;font-weight:700;color:var(--accent);">Parsing Documents...</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:6px;" id="parser-loading-sub">AI is reading your documents</div>
       </div>
       <div id="parser-error" class="err-box" style="margin-top:12px;"></div>
     </div>
@@ -1873,9 +2149,9 @@ function saveRecipe(){
     <!-- STEP 2: Review & Confirm -->
     <div id="parser-step2" style="display:none;">
       <div style="font-family:var(--fh);font-size:22px;font-weight:700;margin-bottom:4px;">Review Parsed Recipe</div>
-      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Check all details before saving. Edit anything that doesn&apos;t look right.</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Check all details before saving. Edit anything that looks wrong.</div>
       <div id="parser-preview"></div>
-      <div style="display:flex;gap:10px;margin-top:16px;padding-bottom:30px;">
+      <div style="display:flex;gap:10px;margin-top:16px;padding-bottom:40px;">
         <button class="btn-cancel" onclick="parserReset()" style="flex:1;">Start Over</button>
         <button class="btn-primary" onclick="saveRecipe()" style="flex:2;font-size:15px;padding:14px;">&#10003; Save Recipe</button>
       </div>
