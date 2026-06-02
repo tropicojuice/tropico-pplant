@@ -524,7 +524,7 @@ const DEF_OPS=[
 // Batching ingredients = warehouse/batching team responsibility
 // Production-only items (water, bags, labels, bins) = production team only
 const COCO04P = {
-  id:'COCO04P', name:'Coconut BD', code:'COCO04P', batchSize:'1000 Kg', docRef:'WICOCO04P v1.4',
+  id:'COCO04P', name:'Coconut BD', code:'COCO04P', batchSize:'1000 Kg', docRef:'WICOCO04P v1.4', shelfLifeMonths:6, storage:'Refrigerated',
 
   // BATCHING PICKLIST — ingredients only (lot code + BBD + photo per item)
   batchIngredients:[
@@ -592,6 +592,335 @@ const COCO04P = {
 };
 
 const RECIPES=[COCO04P];
+
+const PRODUCT_REGISTER = [
+  {
+    "code": "ACAI01P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "APCI04P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 9
+  },
+  {
+    "code": "APOO05P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 9
+  },
+  {
+    "code": "BANO01P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "BLOO17P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 9
+  },
+  {
+    "code": "BLOO21P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "BLST01P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 9
+  },
+  {
+    "code": "BYOO80P",
+    "storage": "Ambient",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "CACH01P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "CHOC04P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "COCO04P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "CUOO01",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": null
+  },
+  {
+    "code": "FCMA01P",
+    "storage": "Ambient",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "FCBEET03P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 18
+  },
+  {
+    "code": "GIOO03P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 9
+  },
+  {
+    "code": "GISY01P",
+    "storage": "Ambient",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "HONY02P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "LAMI01P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "LECH01P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "LEMO02P",
+    "storage": "Ambient",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "LEMO03P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 12
+  },
+  {
+    "code": "LEMO05P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "MADP02P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "MANG06P",
+    "storage": "Ambient",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "MANG08P",
+    "storage": "Ambient",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "MANG10P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "MANG11P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "MANG12P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "MANG13P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "MAOO35P",
+    "storage": "Ambient",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "MAOO94P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "MAOR02P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "MAPE01P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "MBOO19P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 9
+  },
+  {
+    "code": "MBOO22P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 9
+  },
+  {
+    "code": "MBOO31P",
+    "storage": "Ambient",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "MBOO32P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "PASS06P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 2
+  },
+  {
+    "code": "PEAC07P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "PFOO30P",
+    "storage": "Ambient",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "PIRA01P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "RASP01P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "RASP03P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "RHAP02P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "RHST01P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 9
+  },
+  {
+    "code": "STOO31P",
+    "storage": "Ambient",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "STOO37P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "STOO80P",
+    "storage": "Ambient",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "STRA12P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "STRA13P",
+    "storage": "Ambient",
+    "shelfLifeMonths": 4
+  },
+  {
+    "code": "STRA15P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "STRA17P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "STRA18P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "STRA19P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "STRA20P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "STRH01P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 9
+  },
+  {
+    "code": "VANI04P",
+    "storage": "Ambient",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "VANI06P",
+    "storage": "Ambient",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "VANI07P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "VANI08P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "VANI10P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "VANI11P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "VAOO08P",
+    "storage": "Refrigerated",
+    "shelfLifeMonths": 6
+  },
+  {
+    "code": "VAOO10P",
+    "storage": "Ambient",
+    "shelfLifeMonths": 6
+  }
+];
+
+function lookupProduct(code){
+  if(!code)return null;
+  const clean=code.toUpperCase().replace('.','').trim();
+  return PRODUCT_REGISTER.find(p=>p.code.replace('.','').toUpperCase()===clean)||null;
+}
 
 // ─── STATE ───────────────────────────────────────
 function loadS(){try{const r=localStorage.getItem(SK);if(r)return JSON.parse(r);}catch(e){}return null;}
@@ -1864,6 +2193,13 @@ CRITICAL RULES:
 
     // Ensure required fields
     parsedRecipe.id=parsedRecipe.code||('recipe_'+Date.now());
+    // Auto-populate shelf life and storage from product register
+    const regEntry=lookupProduct(parsedRecipe.code);
+    if(regEntry){
+      if(!parsedRecipe.shelfLifeMonths&&regEntry.shelfLifeMonths) parsedRecipe.shelfLifeMonths=regEntry.shelfLifeMonths;
+      if(!parsedRecipe.storage&&regEntry.storage) parsedRecipe.storage=regEntry.storage;
+    }
+
 
     // Merge qcSpecs into qc1 step if present
     if(parsedRecipe.qcSpecs){
