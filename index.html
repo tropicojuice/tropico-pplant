@@ -415,6 +415,7 @@
     <div class="fg"><label class="fl">Work Order Number</label><input class="fi" id="wo-num" placeholder="e.g. WO5760"/></div>
     <div class="fg"><label class="fl">Recipe</label><select class="fsel" id="wo-recipe"></select></div>
     <div class="fg"><label class="fl">Production Date</label><input class="fi" id="wo-date" type="date"/></div>
+    <div class="fg"><label class="fl">Batch Size (Kg)</label><input class="fi" id="wo-batchsize" type="number" placeholder="e.g. 840 — leave blank for standard"/></div>
     <div class="fg"><label class="fl">Notes</label><input class="fi" id="wo-notes" placeholder="Optional..."/></div>
     <div class="fg" id="wo-bnum-row" style="display:none;"><label class="fl">Batch Number (auto-assigned)</label><input class="fi" id="wo-bnum-display" disabled style="color:var(--accent);font-family:var(--fm);"/></div>
     <div class="modal-acts">
@@ -1125,7 +1126,8 @@ function renderDash(){
     if(dashT==='prod_q') h+=`<div style="position:absolute;left:11px;top:50%;transform:translateY(-50%);"><div class="qnum">${wo.prodPos||i+1}</div></div>`;
     const pl=dashT!=='complete'?'padding-left:42px':'';
     h+=`<div class="wo-top" style="${pl}"><div><div class="wo-bnum">${wo.num} &nbsp;|&nbsp; Batch #${wo.batchNum||'?'}</div><div class="wo-name">${r.name||'—'}</div><div class="wo-code">${r.code||''} &middot; ${wo.productDate||''}</div></div><div class="spill sp-${wo.status}">${slabel(wo.status)}</div></div>`;
-    h+=`<div class="wo-meta" style="${pl}"><div class="wm">Size <span>${r.batchSize||'—'}</span></div>${wo.notes?`<div class="wm">Note <span>${wo.notes}</span></div>`:''}</div>`;
+    const batchDisplay=wo.batchKg?wo.batchKg+'Kg':(r.batchSize||'—');
+    h+=`<div class="wo-meta" style="${pl}"><div class="wm">Size <span>${batchDisplay}</span></div>${wo.notes?`<div class="wm">Note <span>${wo.notes}</span></div>`:''}</div>`;
     if(canMgr){
       h+=`<div class="wo-ctrls" style="${pl}">`;
       if(wo.status==='batching_done') h+=`<button class="btn-sm blu" onclick="event.stopPropagation();releaseToProd('${wo.id}')">Release to Production</button>`;
@@ -1191,13 +1193,15 @@ function createWO(){
   const rid=document.getElementById('wo-recipe').value;
   const date=document.getElementById('wo-date').value;
   const notes=document.getElementById('wo-notes').value.trim();
+  const batchSizeInput=document.getElementById('wo-batchsize')?.value.trim()||'';
   if(!num||!rid){toast('Number and recipe required','error');return;}
   const sameDateWOs=S.workOrders.filter(w=>w.productDate===date);
   const batchNum=sameDateWOs.length+1;
   const allBatch=S.workOrders.filter(w=>['draft','batching_queue','batching','batching_done'].includes(w.status));
   const maxBatch=allBatch.reduce((m,w)=>Math.max(m,w.batchNum||0),0);
   const id='wo'+Date.now();
-  S.workOrders.push({id,num:num.startsWith('#')?num:'#'+num,recipeId:rid,productDate:date,notes,batchNum:batchNum,status:'batching_queue',createdAt:new Date().toISOString()});
+  const batchKg=parseFloat(batchSizeInput)||null;
+  S.workOrders.push({id,num:num.startsWith('#')?num:'#'+num,recipeId:rid,productDate:date,notes,batchNum:batchNum,batchKg:batchKg,status:'batching_queue',createdAt:new Date().toISOString()});
   save();closeModal('modal-add-wo');renderDash();toast('Work order created — Batch #'+batchNum,'success');
 }
 
@@ -1230,7 +1234,7 @@ async function openWO(id){
   document.getElementById('r-wo').textContent=wo.num;
   document.getElementById('r-batchnum').textContent='#'+wo.batchNum;
   document.getElementById('r-code').textContent=r.code;
-  document.getElementById('r-size').textContent=r.batchSize;
+  document.getElementById('r-size').textContent=(wo.batchKg?wo.batchKg+'Kg':r.batchSize)||'—';
   document.getElementById('r-badge').textContent=S.user.name+' \u00b7 '+S.user.role;
   renderRun();showScreen('screen-run');
 }
@@ -1243,6 +1247,17 @@ function renderRun(){
 }
 
 // ─── BATCHING MODE ────────────────────────────────
+function calcIngQty(bi, wo, r){
+  // Use WO batch size if set, otherwise recipe standard batch
+  const targetKg=parseFloat(wo.batchKg)||parseFloat(r.standardBatchKg)||parseFloat(r.batchSize)||null;
+  if(!targetKg)return {qty:bi.qty,unit:bi.unit};
+  if(bi.qtyPer1kg){
+    const calc=(parseFloat(bi.qtyPer1kg)*targetKg);
+    return {qty:calc.toFixed(2),unit:bi.unit,calculated:true,batchKg:targetKg};
+  }
+  return {qty:bi.qty,unit:bi.unit};
+}
+
 function renderBatching(r,run){
   const ingr=r.batchIngredients;
   const doneIds=new Set(Object.keys(run.stepRecords).filter(k=>k.startsWith('bi')));
@@ -1262,7 +1277,12 @@ function renderBatching(r,run){
     let cc='pick-item';if(isDone)cc+=' pick-done';
     const rec=run.stepRecords[bi.id];
     h+=`<div class="${cc}" id="pi-${bi.id}">`;
-    h+=`<div class="pick-hdr"><div class="pick-code">${bi.code}</div><div class="pick-name" style="margin-left:8px;">${bi.name}</div><div class="pick-qty">${bi.qty} ${bi.unit}</div></div>`;
+    const calcQ=calcIngQty(bi,curWO,r);
+    const qtyDisplay=calcQ.calculated
+      ?`<span style="color:var(--accent);font-weight:700;">${calcQ.qty} ${calcQ.unit}</span>`
+      +`<span style="font-size:10px;color:var(--text3);margin-left:4px;">calc. for ${calcQ.batchKg}kg batch</span>`
+      :`<span>${calcQ.qty} ${calcQ.unit}</span>`;
+    h+=`<div class="pick-hdr"><div class="pick-code">${bi.code}</div><div class="pick-name" style="margin-left:8px;">${bi.name}</div><div class="pick-qty">${qtyDisplay}</div></div>`;
     if(isDone&&rec){
       h+=`<div class="pick-body"><div style="font-size:12px;color:var(--green);">\u2713 Confirmed by ${rec.opName} &mdash; ${fmt(rec.ts)}</div>`;
       if(rec.lotCode) h+=`<div style="font-size:12px;color:var(--text2);margin-top:3px;">Lot: ${rec.lotCode} &nbsp;|&nbsp; BBD: ${rec.bbd||'—'}</div>`;
@@ -1270,8 +1290,9 @@ function renderBatching(r,run){
     }
     if(isActive&&!isDone){
       h+=`<div class="pick-body">`;
+      const cq=calcIngQty(bi,curWO,r);
       h+=`<div class="inp-row"><input class="sinp" id="bi-lot-${bi.id}" placeholder="Lot code" style="flex:1.5;" /></div>`;
-      h+=`<div class="inp-row"><input class="sinp" id="bi-bbd-${bi.id}" placeholder="BBD (best before date)" /><input class="sinp" id="bi-qty-${bi.id}" placeholder="Qty issued" style="width:100px;flex:none;" /><div class="iunit">${bi.unit}</div></div>`;
+      h+=`<div class="inp-row"><input class="sinp" id="bi-bbd-${bi.id}" placeholder="BBD (best before date)" /><input class="sinp" id="bi-qty-${bi.id}" value="${cq.qty||''}" placeholder="Qty issued" style="width:110px;flex:none;" /><div class="iunit">${bi.unit}</div></div>`;
       h+=`<div class="photo-row"><label class="btn-photo" id="bph-btn-${bi.id}" for="bph-${bi.id}">&#128247; Photo of label</label><input class="pfile" type="file" accept="image/*" capture="environment" id="bph-${bi.id}" onchange="handlePhoto('${bi.id}',this,'batch')"/><img class="pprev" id="bpp-${bi.id}"/></div>`;
       h+=`<button class="bsign" onclick="confirmBatchItem('${bi.id}')">&#10003; Confirm &mdash; ${bi.name}</button>`;
       h+=`</div>`;
@@ -1927,9 +1948,9 @@ function downloadBatchRecord(){
 
       <!-- Document slots -->
       <!-- Hidden file inputs - iOS needs these outside labels -->
-      <input type="file" accept=".pdf,image/*" id="file-wi" style="display:none;" onchange="addDoc('wi',this)"/>
-      <input type="file" accept=".pdf,image/*" id="file-picklist" style="display:none;" onchange="addDoc('picklist',this)"/>
-      <input type="file" accept=".pdf,image/*" id="file-qc" style="display:none;" onchange="addDoc('qc',this)"/>
+      <input type="file" accept=".pdf,.xlsx,.xls,image/*" id="file-wi" style="display:none;" onchange="addDoc('wi',this)"/>
+      <input type="file" accept=".pdf,.xlsx,.xls,image/*" id="file-picklist" style="display:none;" onchange="addDoc('picklist',this)"/>
+      <input type="file" accept=".pdf,.xlsx,.xls,image/*" id="file-qc" style="display:none;" onchange="addDoc('qc',this)"/>
 
       <div id="doc-slots">
         <div class="doc-slot" id="slot-wi">
@@ -2065,20 +2086,48 @@ function parserReset(){
   parsedRecipe=null;
 }
 
+function updateSlotUI(type,filename){
+  const slot=document.getElementById('slot-'+type);
+  if(!slot)return;
+  slot.classList.add('loaded');
+  const btn=slot.querySelector('.doc-slot-btn');
+  if(btn){btn.textContent='\u2713 Loaded';btn.style.background='var(--green-dim)';btn.style.borderColor='var(--green)';btn.style.color='var(--green)';}
+  let fileDiv=slot.querySelector('.doc-slot-file');
+  if(!fileDiv){fileDiv=document.createElement('div');fileDiv.className='doc-slot-file';slot.querySelector('.doc-slot-info').appendChild(fileDiv);}
+  fileDiv.textContent=filename;
+}
+
+function getDocMediaType(file){
+  if(file.type==='application/pdf') return 'application/pdf';
+  if(file.type.startsWith('image/')) return file.type;
+  // Excel files - treat as document
+  if(file.name.endsWith('.xlsx')||file.name.endsWith('.xls')) return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  return file.type||'application/octet-stream';
+}
+
 function addDoc(type, input){
   const file=input.files[0];if(!file)return;
+  const mtype=getDocMediaType(file);
+  const isXlsx=file.name.endsWith('.xlsx')||file.name.endsWith('.xls');
+  if(isXlsx){
+    // For Excel: read as ArrayBuffer, convert to base64
+    const abReader=new FileReader();
+    abReader.onload=e=>{
+      const bytes=new Uint8Array(e.target.result);
+      let binary='';
+      for(let i=0;i<bytes.length;i++) binary+=String.fromCharCode(bytes[i]);
+      const b64=btoa(binary);
+      loadedDocs[type]={data:b64,mtype:'application/pdf',name:file.name,isXlsx:true,origMtype:mtype};
+      updateSlotUI(type,file.name);
+      updateParserBtn();
+    };
+    abReader.readAsArrayBuffer(file);
+    return;
+  }
   const reader=new FileReader();
   reader.onload=e=>{
-    loadedDocs[type]={data:e.target.result.split(',')[1], mtype:file.type, name:file.name};
-    // Update slot UI
-    const slot=document.getElementById('slot-'+type);
-    slot.classList.add('loaded');
-    const btn=slot.querySelector('.doc-slot-btn');
-    if(btn){btn.textContent='\u2713 Loaded';btn.style.background='var(--green-dim)';btn.style.borderColor='var(--green)';btn.style.color='var(--green)';}
-    // Add filename
-    let fileDiv=slot.querySelector('.doc-slot-file');
-    if(!fileDiv){fileDiv=document.createElement('div');fileDiv.className='doc-slot-file';slot.querySelector('.doc-slot-info').appendChild(fileDiv);}
-    fileDiv.textContent=file.name;
+    loadedDocs[type]={data:e.target.result.split(',')[1], mtype:mtype, name:file.name};
+    updateSlotUI(type,file.name);
     updateParserBtn();
   };
   reader.readAsDataURL(file);
@@ -2108,53 +2157,62 @@ async function parseAllDocs(){
   const subEl=document.getElementById('parser-loading-sub');
   if(subEl)subEl.textContent='Reading '+count+' document'+(count>1?'s':'')+' — this takes about 15 seconds';
 
-  const systemPrompt=`You are a food manufacturing recipe parser for Tropico Fruits Pty Ltd.
-You will receive 1-3 documents: a Work Instruction (WI), a Work Order Picklist, and/or a QC In-Line Test sheet.
+  const systemPrompt=`You are a food manufacturing recipe parser for Tropico Fruits Pty Ltd (P-Plant).
+You will receive 1-3 documents: a Work Instruction Excel/PDF (WI), a Work Order Picklist PDF, and/or a QC In-Line Test sheet PDF.
 Extract all recipe data and return ONLY valid JSON with no markdown, no explanation, no code fences.
 
-Return this exact structure:
+DOCUMENT ROLES:
+- Work Instruction (Excel or PDF): machine setup, numbered mixing steps, HIPEX settings, packing. Product code/name/batch size in header.
+- Work Order Picklist (PDF): exact ingredient item codes, descriptions, quantities for a specific batch size. Use these for batchIngredients. IGNORE packaging items (bags, labels, drums, pallets, liners - codes starting with PB, PD, PL, PP, PS).
+- QC Sheet (PDF): Brix, pH, viscosity, colour specs for this product.
+
+Return this exact JSON structure:
 {
   "name": "Product name",
-  "code": "Product code e.g. COCO04P",
-  "batchSize": "e.g. 1000 Kg",
-  "docRef": "Doc number and version from WI header",
+  "code": "Product code e.g. MAOO94P",
+  "batchSize": "e.g. 840 Kg",
+  "standardBatchKg": 840,
+  "docRef": "Doc/WI reference and version if visible",
   "batchIngredients": [
-    {"id":"bi1","code":"ITEM_CODE","name":"Full ingredient name","qty":"quantity as number string","unit":"Kg or L","desc":"qty + unit + packaging notes"}
+    {"id":"bi1","code":"ITEM_CODE","name":"Ingredient name","qty":"quantity as number string","qtyPer1kg":"ratio to 4dp e.g. 0.4762","unit":"Kg or L","desc":"full description"}
   ],
   "qcSpecs": {
-    "brix": {"spec":"43-48","min":43,"max":48},
+    "brix": {"spec":"e.g. <14 or 43-48","min":null,"max":14},
     "acid": {"spec":"Record only","min":null,"max":null},
-    "ph": {"spec":"3.75-4","min":3.75,"max":4},
-    "viscosity": {"spec":"5-8","min":5,"max":8},
-    "colour": {"spec":"description","min":null,"max":null}
+    "ph": {"spec":"3.9-4.2","min":3.9,"max":4.2},
+    "viscosity": {"spec":"5-7","min":5,"max":7},
+    "colour": {"spec":"Yellow/Orange","min":null,"max":null}
   },
   "sections": [
     {
-      "id": "setup",
-      "name": "Machine Setup",
-      "col": "#3498db",
-      "type": "setup",
-      "steps": [
-        {"id":"s1","num":"S1","desc":"Step with <strong>key values</strong> bolded"}
-      ]
+      "id": "setup", "name": "Machine Setup", "col": "#3498db", "type": "setup",
+      "steps": [{"id":"s1","num":"S1","desc":"Step with <strong>key values</strong> bolded"}]
     }
   ]
 }
 
-CRITICAL RULES:
-- batchIngredients: ONLY ingredients the batching team physically weighs. NO town water, NO packaging (bags, labels, bins, intercon, aseptic bags). These are production-only items.
-- If you have the Picklist document, use it for exact ingredient codes, quantities and units
-- If you have the QC sheet, extract the exact specs (Brix range, pH range, viscosity range, colour description)
-- sections must include in order: setup, mix, qc, labels_flav, hipex, pack
-- setup sections use type:"setup" — all steps ticked then one PIN sign-off for the section
-- mixed sections use type:"mixed" — each ingredient step requires individual PIN
-- For ingredient steps: "type":"ingredient","sign":true,"inpLabel":"Actual weight/volume added","inpUnit":"Kg" or "L","target":"expected qty"
-- For temperature steps: "type":"temp","sign":true,"inpLabel":"Temperature recorded","inpUnit":"°C","target":"target range"  
-- For gate steps: "gate":true,"role":"qa" or "role":"supervisor"
-- For QC step: id must be "qc1", type:"qc", include qcFields array with keys: brix,acid,ph,visc,colour
-- Step IDs: s1,s2 for setup; m1,m2 for mixing; qc1 for QC; l1,l2 for labels; h1,h2 for hipex; p1,p2 for packing
-- Use <strong> tags around ingredient names and key values in desc fields
-- Preserve all specific values from documents: temperatures, speeds, volumes, percentages, times`;
+CRITICAL RULES FOR batchIngredients:
+- ONLY include ingredients the batching team physically weighs: fruit purees, sugars, starches, acids, flavours, colours, gums
+- EXCLUDE: water (OWWATT01 or similar), all packaging (bags, drums, labels, pallets, liners)
+- Item codes starting with PB, PD, PL, PP, PS are packaging — EXCLUDE
+- OWWATT01 or any 'Water - Town' item — EXCLUDE
+- For each ingredient: qty = quantity from picklist for that batch, qtyPer1kg = qty divided by standardBatchKg (4 decimal places)
+- If no picklist provided, estimate from WI step quantities
+
+RULES FOR sections:
+- Must include in order: setup, mix, qc, labels_flav, hipex, pack
+- setup sections: type='setup', all steps ticked then one PIN sign-off
+- mix and other active sections: type='mixed'
+- For ingredient steps: type='ingredient', sign:true, inpLabel:'Actual weight/volume added', inpUnit:'Kg' or 'L', target:'expected qty'
+- For temperature steps: type='temp', sign:true, inpLabel:'Temperature recorded', inpUnit:'°C', target:'range e.g. 55-61°C'
+- Gate steps (supervisor/QA approval): gate:true, role:'supervisor' or 'qa'
+- QC step must have id:'qc1', type:'qc', and qcFields array with keys: brix, acid, ph, visc, colour
+- qcFields must use specs from QC sheet if provided, otherwise from product register
+- Use <strong> tags around ingredient names, codes, and key values in step desc fields
+- Extract ALL numbered steps from the WI exactly — do not summarise or skip any
+- Step IDs: s1,s2 for setup; m1,m2 for mix; qc1 for QC; l1,l2 for labels; h1,h2 for hipex; p1,p2 for pack
+- For HIPEX section include all pre-transfer checks as individual ticked items
+- Preserve all specific values: temperatures, speeds, volumes, percentages, times, housing sizes`;
 
   try{
     // Build content array with all loaded docs
@@ -2163,10 +2221,13 @@ CRITICAL RULES:
     
     Object.entries(loadedDocs).forEach(([type,doc])=>{
       msgContent.push({type:'text',text:`--- ${docLabels[type]} ---`});
-      const blockType=doc.mtype==='application/pdf'?'document':'image';
+      // PDFs and Excel = document block, images = image block
+      const isImage=doc.mtype.startsWith('image/');
+      const blockType=isImage?'image':'document';
+      const mediaType=isImage?doc.mtype:'application/pdf'; // API accepts pdf for doc blocks
       msgContent.push({
         type:blockType,
-        source:{type:'base64',media_type:doc.mtype,data:doc.data}
+        source:{type:'base64',media_type:mediaType,data:doc.data}
       });
     });
     msgContent.push({type:'text',text:'Parse all the above documents and return the complete recipe JSON.'});
@@ -2198,6 +2259,14 @@ CRITICAL RULES:
       if(!parsedRecipe.shelfLifeMonths&&regEntry.shelfLifeMonths) parsedRecipe.shelfLifeMonths=regEntry.shelfLifeMonths;
       if(!parsedRecipe.storage&&regEntry.storage) parsedRecipe.storage=regEntry.storage;
     }
+    // Ensure qtyPer1kg ratios exist for all batch ingredients
+    const stdBatch=parseFloat(parsedRecipe.standardBatchKg)||parseFloat(parsedRecipe.batchSize)||1;
+    (parsedRecipe.batchIngredients||[]).forEach(bi=>{
+      if(!bi.qtyPer1kg&&bi.qty){
+        bi.qtyPer1kg=(parseFloat(bi.qty)/stdBatch).toFixed(4);
+      }
+    });
+    parsedRecipe.standardBatchKg=stdBatch;
 
 
     // Merge qcSpecs into qc1 step if present
@@ -2437,9 +2506,9 @@ Mark PASS only if code, name, batch, DOM and weight are all correct.`}
 
       <!-- Document slots -->
       <!-- Hidden file inputs - iOS needs these outside labels -->
-      <input type="file" accept=".pdf,image/*" id="file-wi" style="display:none;" onchange="addDoc('wi',this)"/>
-      <input type="file" accept=".pdf,image/*" id="file-picklist" style="display:none;" onchange="addDoc('picklist',this)"/>
-      <input type="file" accept=".pdf,image/*" id="file-qc" style="display:none;" onchange="addDoc('qc',this)"/>
+      <input type="file" accept=".pdf,.xlsx,.xls,image/*" id="file-wi" style="display:none;" onchange="addDoc('wi',this)"/>
+      <input type="file" accept=".pdf,.xlsx,.xls,image/*" id="file-picklist" style="display:none;" onchange="addDoc('picklist',this)"/>
+      <input type="file" accept=".pdf,.xlsx,.xls,image/*" id="file-qc" style="display:none;" onchange="addDoc('qc',this)"/>
 
       <div id="doc-slots">
         <div class="doc-slot" id="slot-wi">
