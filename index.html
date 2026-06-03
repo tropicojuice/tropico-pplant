@@ -542,6 +542,10 @@ const COCO04P = {
   id:'COCO04P', name:'Coconut BD', code:'COCO04P', batchSize:'1000 Kg', docRef:'WICOCO04P v1.4', shelfLifeMonths:6, storage:'Refrigerated',
 
   // BATCHING PICKLIST — ingredients only (lot code + BBD + photo per item)
+  warehouseIngredients:[
+    // Drums/juice/puree — confirmed by warehouse team before batching
+    // COCO04P has no juice/puree drums — section left empty as example
+  ],
   batchIngredients:[
     {id:'bi1',code:'SUGARS03',name:'Manufacturers Sugar',qty:'397',unit:'Kg',desc:'397 Kg — 15Kg bags'},
     {id:'bi2',code:'ODCOCO03',name:'Coconut Macaroon Fine',qty:'60.3',unit:'Kg',desc:'60.3 Kg'},
@@ -611,6 +615,9 @@ const RECIPES=[COCO04P,
   id:'TEST01',name:'TEST RECIPE',code:'TEST01',batchSize:'100 Kg',
   standardBatchKg:100,docRef:'TEST v1.0',shelfLifeMonths:6,storage:'Refrigerated',
 
+  warehouseIngredients:[
+    {id:'wi1',code:'TEST_DRUM1',name:'Test Juice Drum',qty:'20',qtyPer1kg:'0.2000',unit:'Kg',desc:'20 Kg — juice drum from freezer'},
+  ],
   batchIngredients:[
     {id:'bi1',code:'TEST_ING1',name:'Test Ingredient A',qty:'60',qtyPer1kg:'0.6000',unit:'Kg',desc:'60 Kg — main ingredient'},
     {id:'bi2',code:'TEST_ING2',name:'Test Ingredient B',qty:'10',qtyPer1kg:'0.1000',unit:'Kg',desc:'10 Kg — secondary ingredient'},
@@ -1333,6 +1340,39 @@ function renderRun(){
 }
 
 // ─── BATCHING MODE ────────────────────────────────
+function getWarehouseTiming(run){
+  const records=Object.keys(run.stepRecords)
+    .filter(k=>k.startsWith('wi'))
+    .map(k=>run.stepRecords[k])
+    .filter(Boolean);
+  if(!records.length)return null;
+  const times=records.map(r=>new Date(r.ts).getTime()).filter(t=>!isNaN(t));
+  if(!times.length)return null;
+  const diffMin=Math.round((Math.max(...times)-Math.min(...times))/60000);
+  if(diffMin<1)return 'Done';
+  return diffMin<60?diffMin+'min':Math.floor(diffMin/60)+'h'+(diffMin%60>0?diffMin%60+'min':'');
+}
+
+function getSectionTiming(sec,run){
+  // Find earliest and latest timestamps for steps in this section
+  const stepIds=sec.steps.map(s=>s.id);
+  const records=stepIds.map(id=>run.stepRecords[id]).filter(Boolean);
+  if(sec.type==='setup'&&run.secSigned&&run.secSigned[sec.id]){
+    records.push(run.secSigned[sec.id]);
+  }
+  if(!records.length) return null;
+  const times=records.map(r=>new Date(r.ts).getTime()).filter(t=>!isNaN(t));
+  if(!times.length) return null;
+  const start=Math.min(...times);
+  const end=Math.max(...times);
+  const diffMs=end-start;
+  const diffMin=Math.round(diffMs/60000);
+  if(diffMin<1) return 'Done';
+  if(diffMin<60) return diffMin+'min';
+  const h=Math.floor(diffMin/60),m=diffMin%60;
+  return h+'h'+(m>0?m+'min':'');
+}
+
 function calcIngQty(bi, wo, r){
   // Use WO batch size if set, otherwise recipe standard batch
   const targetKg=parseFloat(wo.batchKg)||parseFloat(r.standardBatchKg)||parseFloat(r.batchSize)||null;
@@ -1351,8 +1391,75 @@ function renderBatching(r,run){
   const done=doneIds.size;
   document.getElementById('r-prog').style.width=Math.round(done/total*100)+'%';
 
-  let h=`<div class="run-sec-hdr"><span style="font-size:8px;color:#f39c12">&#9632;</span><span class="run-sec-name" style="color:#f39c12">Ingredient Picklist</span><span style="font-size:12px;color:var(--text2);margin-left:auto;">${done}/${total} confirmed</span></div>`;
-  h+=`<div style="font-size:12px;color:var(--text2);margin-bottom:12px;padding:8px 10px;background:var(--surface2);border-radius:7px;">&#8505; Batching team responsibility: <strong>dry ingredients only</strong>. Town water, bags and labels are handled by production.</div>`;
+  const whIngr=r.warehouseIngredients||[];
+  const whDone=new Set(Object.keys(run.stepRecords).filter(k=>k.startsWith('wi')));
+  const whTotal=whIngr.length;
+  const whComplete=whIngr.every(wi=>whDone.has(wi.id));
+  const canConfirmWarehouse=['supervisor','admin'].includes(S.user.role);
+
+  // STAGE 1: Warehouse ingredients (if any)
+  if(whTotal>0){
+    const whTiming=whComplete?getWarehouseTiming(run):null;
+    h+=`<div class="run-sec-hdr"><span style="font-size:8px;color:#a87fd6">&#9632;</span>`;
+    h+=`<span class="run-sec-name" style="color:#a87fd6">Stage 1 — Warehouse Drums</span>`;
+    h+=whComplete?`<span style="color:var(--green);font-size:12px;margin-left:auto;">&#10003; ${whTiming||'Done'}</span>`:`<span style="font-size:12px;color:var(--text2);margin-left:auto;">${whDone.size}/${whTotal} confirmed</span>`;
+    h+=`</div>`;
+    h+=`<div style="font-size:12px;color:var(--text2);margin-bottom:10px;padding:7px 10px;background:var(--surface2);border-radius:7px;">&#9432; Warehouse/Rachel: confirm drums picked from freezer. Required before batch can be released to production.</div>`;
+    let whActiveId=null;for(const wi of whIngr){if(!whDone.has(wi.id)){whActiveId=wi.id;break;}}
+    whIngr.forEach(wi=>{
+      const isDone=whDone.has(wi.id);
+      const isActive=wi.id===whActiveId;
+      const rec=run.stepRecords[wi.id];
+      const calcQ=calcIngQty(wi,curWO,r);
+      h+=`<div class="pick-item ${isDone?'pick-done':''}" id="pi-${wi.id}">`;
+      h+=`<div class="pick-hdr"><div class="pick-code">${wi.code}</div><div class="pick-name" style="margin-left:8px;">${wi.name}</div><div class="pick-qty"><span style="color:var(--purple);font-weight:700;">${calcQ.qty} ${wi.unit}</span></div></div>`;
+      if(isDone&&rec){
+        h+=`<div class="pick-body"><div style="font-size:12px;color:var(--green);">&#10003; Confirmed by ${rec.opName} &mdash; ${fmt(rec.ts)}</div>`;
+        if(rec.lotRows&&rec.lotRows.length>1){
+          rec.lotRows.forEach(lr=>h+=`<div style="font-size:11px;color:var(--text2);margin-top:2px;">Lot: ${lr.lot} | BBD: ${lr.bbd||'—'} | Qty: ${lr.qty} ${wi.unit}</div>`);
+        } else {
+          h+=`<div style="font-size:12px;color:var(--text2);margin-top:3px;">Lot: ${rec.lotCode} | BBD: ${rec.bbd||'—'} | Qty: ${rec.qty} ${wi.unit}</div>`;
+        }
+        h+=`</div>`;
+      }
+      if(isActive&&!isDone){
+        if(!canConfirmWarehouse){
+          h+=`<div class="pick-body" style="color:var(--text2);font-size:13px;">&#128274; Supervisor or Rachel must confirm warehouse drums</div>`;
+        } else {
+          h+=`<div class="pick-body">`;
+          const wlotRows=run.lotRows&&run.lotRows[wi.id]?run.lotRows[wi.id]:[{lot:'',bbd:'',qty:calcQ.qty||''}];
+          h+=`<div id="lot-rows-${wi.id}">`;
+          wlotRows.forEach((lr,li)=>{
+            h+=`<div class="inp-row" style="margin-bottom:5px;">`;
+            h+=`<input class="sinp" id="bi-lot-${wi.id}-${li}" placeholder="Lot code" value="${lr.lot||''}" style="flex:1.4;"/>`;
+            h+=`<input class="sinp" id="bi-bbd-${wi.id}-${li}" type="date" value="${lr.bbd||''}" style="flex:1.1;"/>`;
+            h+=`<input class="sinp" id="bi-qty-${wi.id}-${li}" value="${lr.qty||''}" placeholder="Qty" style="width:80px;flex:none;"/>`;
+            h+=`<div class="iunit">${wi.unit}</div>`;
+            if(li>0) h+=`<div onclick="removeLotRow('${wi.id}',${li})" style="cursor:pointer;color:var(--red);padding:0 6px;font-size:18px;">&times;</div>`;
+            h+=`</div>`;
+          });
+          h+=`</div>`;
+          h+=`<button class="btn-sm out" style="width:100%;padding:7px;margin-bottom:8px;font-size:12px;" onclick="addLotRow('${wi.id}')">+ Add another lot code</button>`;
+          h+=`<div class="photo-row"><label class="btn-photo ${photos[wi.id]?'ok':''}" for="pf-${wi.id}">&#128247; Photo of drum label</label><input class="pfile" type="file" accept="image/*" capture="environment" id="pf-${wi.id}" onchange="handlePhoto('${wi.id}',this,'batch')"/></div>`;
+          h+=`<button class="bsign" style="background:var(--purple);color:#fff;" onclick="confirmBatchItem('${wi.id}')">&#10003; Confirm Drum &mdash; ${wi.name}</button>`;
+          h+=`</div>`;
+        }
+      }
+      h+=`</div>`;
+    });
+    h+=`<div class="divider"></div>`;
+  }
+
+  // STAGE 2: Dry ingredients header
+  let h2=`<div class="run-sec-hdr"><span style="font-size:8px;color:#f39c12">&#9632;</span>`;
+  h2+=`<span class="run-sec-name" style="color:#f39c12">Stage 2 — Dry Ingredients</span>`;
+  h2+=`<span style="font-size:12px;color:var(--text2);margin-left:auto;">${done}/${total} confirmed</span>`;
+  h2+=`</div>`;
+  h+=h2;
+  if(whTotal>0&&!whComplete){
+    h+=`<div style="padding:14px;text-align:center;color:var(--text2);font-size:13px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;">&#128274; Complete Stage 1 (Warehouse Drums) before batching dry ingredients</div>`;
+  } else {
+    h+=`<div style="font-size:12px;color:var(--text2);margin-bottom:10px;padding:7px 10px;background:var(--surface2);border-radius:7px;">&#8505; Batching team: dry ingredients only. Water, bags and labels handled by production.</div>`;
 
   // Find first incomplete
   let activeId=null;for(const bi of ingr){if(!doneIds.has(bi.id)){activeId=bi.id;break;}}
@@ -1377,14 +1484,27 @@ function renderBatching(r,run){
     if(isActive&&!isDone){
       h+=`<div class="pick-body">`;
       const cq=calcIngQty(bi,curWO,r);
-      h+=`<div class="inp-row"><input class="sinp" id="bi-lot-${bi.id}" placeholder="Lot code" style="flex:1.5;" /></div>`;
-      h+=`<div class="inp-row"><input class="sinp" id="bi-bbd-${bi.id}" placeholder="BBD (best before date)" /><input class="sinp" id="bi-qty-${bi.id}" value="${cq.qty||''}" placeholder="Qty issued" style="width:110px;flex:none;" /><div class="iunit">${bi.unit}</div></div>`;
+      const lotRows=run.lotRows&&run.lotRows[bi.id]?run.lotRows[bi.id]:[{lot:'',bbd:'',qty:cq.qty||''}];
+      h+=`<div id="lot-rows-${bi.id}">`;
+      lotRows.forEach((lr,li)=>{
+        h+=`<div class="inp-row" style="margin-bottom:5px;">`;
+        h+=`<input class="sinp" id="bi-lot-${bi.id}-${li}" placeholder="Lot code" value="${lr.lot||''}" style="flex:1.4;"/>`;
+        h+=`<input class="sinp" id="bi-bbd-${bi.id}-${li}" type="date" value="${lr.bbd||''}" style="flex:1.1;"/>`;
+        h+=`<input class="sinp" id="bi-qty-${bi.id}-${li}" value="${lr.qty||''}" placeholder="Qty" style="width:80px;flex:none;"/>`;
+        h+=`<div class="iunit">${bi.unit}</div>`;
+        if(li>0) h+=`<div onclick="removeLotRow('${bi.id}',${li})" style="cursor:pointer;color:var(--red);padding:0 6px;font-size:18px;">&times;</div>`;
+        h+=`</div>`;
+      });
+      h+=`</div>`;
+      h+=`<button class="btn-sm out" style="width:100%;padding:7px;margin-bottom:8px;font-size:12px;" onclick="addLotRow('${bi.id}')">+ Add another lot code</button>`;
       h+=`<div class="photo-row"><label class="btn-photo" id="bph-btn-${bi.id}" for="bph-${bi.id}">&#128247; Photo of label</label><input class="pfile" type="file" accept="image/*" capture="environment" id="bph-${bi.id}" onchange="handlePhoto('${bi.id}',this,'batch')"/><img class="pprev" id="bpp-${bi.id}"/></div>`;
       h+=`<button class="bsign" onclick="confirmBatchItem('${bi.id}')">&#10003; Confirm &mdash; ${bi.name}</button>`;
       h+=`</div>`;
     }
     h+=`</div>`;
   });
+
+  } // end else (stage 2 unlocked)
 
   const allDone=ingr.every(bi=>doneIds.has(bi.id));
   if(allDone){
@@ -1402,13 +1522,50 @@ function renderBatching(r,run){
   document.getElementById('run-body').innerHTML=h;
 }
 
+function addLotRow(biId){
+  const run=S.batchRuns[curWO.id];
+  if(!run.lotRows)run.lotRows={};
+  saveLotRows(biId);
+  if(!run.lotRows[biId])run.lotRows[biId]=[{lot:'',bbd:'',qty:''}];
+  run.lotRows[biId].push({lot:'',bbd:'',qty:''});
+  saveBatchRun(curWO.id);
+  renderRun();
+}
+
+function removeLotRow(biId,idx){
+  const run=S.batchRuns[curWO.id];
+  if(!run.lotRows||!run.lotRows[biId])return;
+  saveLotRows(biId);
+  run.lotRows[biId].splice(idx,1);
+  saveBatchRun(curWO.id);
+  renderRun();
+}
+
+function saveLotRows(biId){
+  const run=S.batchRuns[curWO.id];
+  if(!run.lotRows)run.lotRows={};
+  const rows=[];
+  let i=0;
+  while(document.getElementById('bi-lot-'+biId+'-'+i)){
+    rows.push({
+      lot:document.getElementById('bi-lot-'+biId+'-'+i)?.value.trim()||'',
+      bbd:document.getElementById('bi-bbd-'+biId+'-'+i)?.value||'',
+      qty:document.getElementById('bi-qty-'+biId+'-'+i)?.value.trim()||'',
+    });
+    i++;
+  }
+  if(rows.length)run.lotRows[biId]=rows;
+}
+
 function confirmBatchItem(biId){
-  const lot=document.getElementById('bi-lot-'+biId)?.value.trim();
-  const bbd=document.getElementById('bi-bbd-'+biId)?.value.trim();
-  const qty=document.getElementById('bi-qty-'+biId)?.value.trim();
-  if(!lot){toast('Enter lot code first','error');return;}
-  // PIN required per ingredient
-  pmCtx={type:'batch_item',biId,lot,bbd,qty,photo:photos[biId]||null};
+  saveLotRows(biId);
+  const run=S.batchRuns[curWO.id];
+  const rows=(run.lotRows&&run.lotRows[biId])||[];
+  const validRows=rows.filter(r=>r.lot&&r.lot.trim());
+  if(!validRows.length){toast('Enter at least one lot code','error');return;}
+  const totalQty=validRows.reduce((sum,r)=>sum+(parseFloat(r.qty)||0),0);
+  const lotSummary=validRows.map(r=>r.lot+(r.qty?' ('+r.qty+'kg)':'')).join(' + ');
+  pmCtx={type:'batch_item',biId,lot:lotSummary,bbd:validRows[0].bbd,qty:totalQty.toFixed(2),lotRows:validRows,photo:photos[biId]||null};
   openPM('Confirm Ingredient','Enter your PIN to confirm this ingredient',null);
 }
 
@@ -1435,7 +1592,9 @@ function renderProduction(r,run){
     const ticks=run.secTicks[sec.id]||{};
     const secSigned=run.secSigned&&run.secSigned[sec.id];
 
-    h+=`<div class="run-sec-hdr"><span style="font-size:8px;color:${sec.col}">&#9632;</span><span class="run-sec-name" style="color:${sec.col}">${sec.name}</span>${secDone?'<span style="color:var(--green);font-size:12px;margin-left:auto;">\u2713 Done</span>':''}</div>`;
+    const secTiming=getSectionTiming(sec,run);
+    const secDoneDisplay=secDone?`<span style="color:var(--green);font-size:12px;margin-left:auto;">\u2713 ${secTiming?secTiming:'Done'}</span>`:'';
+    h+=`<div class="run-sec-hdr"><span style="font-size:8px;color:${sec.col}">&#9632;</span><span class="run-sec-name" style="color:${sec.col}">${sec.name}</span>${secDoneDisplay}</div>`;
 
     if(isSetupSec){
       // Render as tick list — one group sign-off at the end
@@ -1685,8 +1844,8 @@ function confirmPM(){
   const ts=new Date().toISOString();
 
   if(ctx.type==='batch_item'){
-    run.stepRecords[ctx.biId]={opId:op.id,opName:op.name,opRole:op.role,ts,lotCode:ctx.lot,bbd:ctx.bbd,qty:ctx.qty,hasPhoto:!!ctx.photo};
-    run.auditLog.push({type:'batch',id:ctx.biId,opName:op.name,opRole:op.role,ts,lotCode:ctx.lot,bbd:ctx.bbd,qty:ctx.qty});
+    run.stepRecords[ctx.biId]={opId:op.id,opName:op.name,opRole:op.role,ts,lotCode:ctx.lot,bbd:ctx.bbd,qty:ctx.qty,lotRows:ctx.lotRows||[],hasPhoto:!!ctx.photo};
+    run.auditLog.push({type:'batch',id:ctx.biId,opName:op.name,opRole:op.role,ts,lotCode:ctx.lot,bbd:ctx.bbd,qty:ctx.qty,lotRows:ctx.lotRows||[]});
     closePM();toast('\u2713 '+ctx.lot+' confirmed by '+op.name,'success');renderRun();
   } else if(ctx.type==='sec_sign'){
     if(!run.secSigned)run.secSigned={};
@@ -2012,8 +2171,43 @@ function downloadBatchRecord(){
     <tbody>${prodRows}</tbody>
   </table>
 
+  <!-- TIMING SUMMARY -->
+  <h2>4. Production Timing</h2>
+  <table>
+    <thead><tr><th>Section</th><th>Start</th><th>End</th><th>Duration</th></tr></thead>
+    <tbody>
+    ${(()=>{
+      let rows='';
+      let batchStart=null,batchEnd=null;
+      r.sections.forEach(sec=>{
+        const stepIds=sec.steps.map(s=>s.id);
+        const recs=[...stepIds.map(id=>run.stepRecords[id]).filter(Boolean)];
+        if(sec.type==='setup'&&run.secSigned&&run.secSigned[sec.id]) recs.push(run.secSigned[sec.id]);
+        const times=recs.map(r=>new Date(r.ts).getTime()).filter(t=>!isNaN(t));
+        if(!times.length)return;
+        const start=Math.min(...times),end=Math.max(...times);
+        if(!batchStart||start<batchStart)batchStart=start;
+        if(!batchEnd||end>batchEnd)batchEnd=end;
+        const diffMin=Math.round((end-start)/60000);
+        const dur=diffMin<1?'<1 min':diffMin<60?diffMin+' min':Math.floor(diffMin/60)+'h '+(diffMin%60>0?diffMin%60+'min':'');
+        const startStr=new Date(start).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit',hour12:true});
+        const endStr=new Date(end).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit',hour12:true});
+        rows+=`<tr><td>${sec.name}</td><td>${startStr}</td><td>${endStr}</td><td style='font-weight:700;'>${dur}</td></tr>`;
+      });
+      if(batchStart&&batchEnd){
+        const tot=Math.round((batchEnd-batchStart)/60000);
+        const totStr=tot<60?tot+' min':Math.floor(tot/60)+'h '+(tot%60>0?tot%60+' min':'');
+        const bs=new Date(batchStart).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit',hour12:true});
+        const be=new Date(batchEnd).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit',hour12:true});
+        rows+=`<tr style='background:#f0f4f8;font-weight:700;'><td>TOTAL BATCH</td><td>${bs}</td><td>${be}</td><td>${totStr}</td></tr>`;
+      }
+      return rows;
+    })()}
+    </tbody>
+  </table>
+
   <!-- SIGN-OFF SUMMARY -->
-  <h2>4. Key Sign-Offs</h2>
+  <h2>5. Key Sign-Offs</h2>
   <div class="sign-block">
     <div class="sign-cell">
       <div class="sign-role">&#129514; QC Approval</div>
