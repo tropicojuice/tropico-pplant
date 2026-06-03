@@ -1059,7 +1059,7 @@ function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classL
 function backToDash(){showScreen('screen-dashboard');renderDash();}
 function backToRun(){showScreen('screen-run');}
 function showAudit(){renderAudit();showScreen('screen-audit');}
-function goAdmin(){if(S.user.role!=='admin'){toast('Admin only','error');return;}renderAdmin();showScreen('screen-admin');}
+function goAdmin(){if(!['admin','pd'].includes(S.user.role)){toast('Admin or PD only','error');return;}renderAdmin();showScreen('screen-admin');}
 function showModal(id){document.getElementById(id).classList.add('show');}
 function closeModal(id){document.getElementById(id).classList.remove('show');}
 document.querySelectorAll('.modal-ov').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('show');}));
@@ -2110,16 +2110,33 @@ function addDoc(type, input){
   const mtype=getDocMediaType(file);
   const isXlsx=file.name.endsWith('.xlsx')||file.name.endsWith('.xls');
   if(isXlsx){
-    // For Excel: read as ArrayBuffer, convert to base64
+    // For Excel: load SheetJS dynamically and extract as text
     const abReader=new FileReader();
-    abReader.onload=e=>{
-      const bytes=new Uint8Array(e.target.result);
-      let binary='';
-      for(let i=0;i<bytes.length;i++) binary+=String.fromCharCode(bytes[i]);
-      const b64=btoa(binary);
-      loadedDocs[type]={data:b64,mtype:'application/pdf',name:file.name,isXlsx:true,origMtype:mtype};
-      updateSlotUI(type,file.name);
-      updateParserBtn();
+    abReader.onload=async e=>{
+      try{
+        // Dynamically load SheetJS
+        if(!window.XLSX){
+          await new Promise((res,rej)=>{
+            const s=document.createElement('script');
+            s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+            s.onload=res;s.onerror=rej;
+            document.head.appendChild(s);
+          });
+        }
+        const wb=window.XLSX.read(e.target.result,{type:'array'});
+        let textContent='';
+        wb.SheetNames.forEach(sheetName=>{
+          const ws=wb.Sheets[sheetName];
+          const csv=window.XLSX.utils.sheet_to_csv(ws,{blankrows:false});
+          if(csv.trim()) textContent+=`\n--- SHEET: ${sheetName} ---\n${csv}`;
+        });
+        loadedDocs[type]={textContent,mtype:'text/plain',name:file.name,isXlsx:true};
+        updateSlotUI(type,file.name);
+        updateParserBtn();
+      }catch(err){
+        toast('Could not read Excel file: '+err.message,'error');
+        console.error(err);
+      }
     };
     abReader.readAsArrayBuffer(file);
     return;
@@ -2221,14 +2238,15 @@ RULES FOR sections:
     
     Object.entries(loadedDocs).forEach(([type,doc])=>{
       msgContent.push({type:'text',text:`--- ${docLabels[type]} ---`});
-      // PDFs and Excel = document block, images = image block
-      const isImage=doc.mtype.startsWith('image/');
-      const blockType=isImage?'image':'document';
-      const mediaType=isImage?doc.mtype:'application/pdf'; // API accepts pdf for doc blocks
-      msgContent.push({
-        type:blockType,
-        source:{type:'base64',media_type:mediaType,data:doc.data}
-      });
+      if(doc.isXlsx||doc.mtype==='text/plain'){
+        // Excel extracted as text - send as text message
+        msgContent.push({type:'text',text:`--- EXCEL FILE: ${doc.name} ---\n${doc.textContent||''}` });
+      } else if(doc.mtype.startsWith('image/')){
+        msgContent.push({type:'image',source:{type:'base64',media_type:doc.mtype,data:doc.data}});
+      } else {
+        // PDF - send as document
+        msgContent.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:doc.data}});
+      }
     });
     msgContent.push({type:'text',text:'Parse all the above documents and return the complete recipe JSON.'});
 
