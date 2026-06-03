@@ -7,7 +7,7 @@
 <script type="module">
   // ─── FIREBASE INIT ───────────────────────────────
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyCOqCeKRY7Lt0yzZCIMXxzNhdPzf2_yCd4",
@@ -22,7 +22,7 @@
   const db = getFirestore(fbApp);
 
   // Expose Firebase functions to global scope for the main script
-  window._fb = { db, doc, getDoc, setDoc, onSnapshot, collection, getDocs };
+  window._fb = { db, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, getDocs };
   window._fbReady = true;
   window.dispatchEvent(new Event('fbready'));
 </script>
@@ -592,7 +592,54 @@ const COCO04P = {
   ]
 };
 
-const RECIPES=[COCO04P];
+const RECIPES=[COCO04P,
+{
+  id:'TEST01',name:'TEST RECIPE',code:'TEST01',batchSize:'100 Kg',
+  standardBatchKg:100,docRef:'TEST v1.0',shelfLifeMonths:6,storage:'Refrigerated',
+
+  batchIngredients:[
+    {id:'bi1',code:'TEST_ING1',name:'Test Ingredient A',qty:'60',qtyPer1kg:'0.6000',unit:'Kg',desc:'60 Kg — main ingredient'},
+    {id:'bi2',code:'TEST_ING2',name:'Test Ingredient B',qty:'10',qtyPer1kg:'0.1000',unit:'Kg',desc:'10 Kg — secondary ingredient'},
+  ],
+
+  sections:[
+    {id:'setup',name:'Machine Setup',col:'#3498db',type:'setup',steps:[
+      {id:'s1',num:'S1',desc:'Set up <strong>Inline Filter</strong>: Housing <strong>1.6mm</strong>'},
+      {id:'s2',num:'S2',desc:'Set <strong>Kettle</strong> temp to <strong>60°C</strong>, scraper speed <strong>90%</strong>'},
+    ]},
+    {id:'mix',name:'Batch Mixing — 100kg',col:'#f39c12',type:'mixed',steps:[
+      {id:'m1',num:'1',desc:'Add <strong>30 L Ambient WATER</strong> to kettle',type:'ingredient',sign:true,inpLabel:'Actual volume added',inpUnit:'L',target:'30 L',prodOnly:true},
+      {id:'m2',num:'2',desc:'Add <strong>TEST INGREDIENT A</strong> (TEST_ING1) — <strong>60 Kg</strong>',type:'ingredient',sign:true,inpLabel:'Actual weight added',inpUnit:'Kg',target:'60 Kg'},
+      {id:'m3',num:'3',desc:'Add <strong>TEST INGREDIENT B</strong> (TEST_ING2) — <strong>10 Kg</strong>',type:'ingredient',sign:true,inpLabel:'Actual weight added',inpUnit:'Kg',target:'10 Kg'},
+      {id:'m4',num:'4',desc:'Once kettle reaches <strong>50°C</strong>, record temperature',type:'temp',sign:true,inpLabel:'Kettle temp',inpUnit:'°C',target:'≥ 50°C'},
+      {id:'m5',num:'5',desc:'After <strong>5 min mixing at 60°C</strong>, take sample to lab for QC testing',type:'qc_trigger',sign:true,inpLabel:'Sample taken at time',inpUnit:''},
+    ]},
+    {id:'qc',name:'QC In-Line Testing',col:'#a87fd6',type:'single',steps:[
+      {id:'qc1',num:'QC',desc:'Record QC test results. All parameters must be within spec before proceeding.',type:'qc',gate:true,role:'qa',
+       qcFields:[
+         {key:'brix',label:'BRIX',spec:'43–48',min:43,max:48},
+         {key:'acid',label:'ACID',spec:'Record only',min:null,max:null},
+         {key:'ph',label:'pH',spec:'3.75–4',min:3.75,max:4},
+         {key:'visc',label:'Viscosity',spec:'5–8',min:5,max:8},
+         {key:'colour',label:'Colour',spec:'Test colour',min:null,max:null},
+       ]}
+    ]},
+    {id:'labels_flav',name:'Labels & Flavours',col:'#e74c3c',type:'mixed',steps:[
+      {id:'l1',num:'12',desc:'Print batch labels. <strong>AI Label Check</strong> required before sign-off.',type:'label_check',gate:true,role:'qa'},
+      {id:'l2',num:'13',desc:'Sample approved by <strong>Supervisor or R&D</strong>. Proceed.',type:'gate',gate:true,role:'supervisor'},
+    ]},
+    {id:'hipex',name:'HIPEX Checks & Transfer',col:'#1abc9c',type:'setup',steps:[
+      {id:'h1',num:'16',desc:'Filler in SIP mode ✓ | Valves in auto mode ✓ | Correct Recipe: TEST01 ✓ | Metal Detector set ✓'},
+      {id:'h2',num:'17',desc:'Transfer batch to main vessel using <strong>PUMP</strong>'},
+    ]},
+    {id:'pack',name:'Samples, Packing & Labels',col:'#2ecc71',type:'mixed',steps:[
+      {id:'p1',num:'18',desc:'<strong>SAMPLES (QA)</strong>: Collect (1) 1Kg bag correctly labelled.',type:'gate',gate:true,role:'qa'},
+      {id:'p2',num:'19',desc:'<strong>PACK</strong>: Pack into container. Attach label.',type:'setup_step'},
+      {id:'p4',num:'FIN',desc:'<strong>SUPERVISOR FINAL SIGN-OFF</strong>: Supervisor has checked complete work order.',type:'gate',gate:true,role:'supervisor'},
+    ]},
+  ]
+}
+];
 
 const PRODUCT_REGISTER = [
   {
@@ -1059,7 +1106,11 @@ function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classL
 function backToDash(){showScreen('screen-dashboard');renderDash();}
 function backToRun(){showScreen('screen-run');}
 function showAudit(){renderAudit();showScreen('screen-audit');}
-function goAdmin(){if(!['admin','pd'].includes(S.user.role)){toast('Admin or PD only','error');return;}renderAdmin();showScreen('screen-admin');}
+function goAdmin(){
+  if(!['admin','pd'].includes(S.user.role)){toast('Admin or PD only','error');return;}
+  if(S.user.role==='pd'){renderPDPanel();showScreen('screen-pd');return;}
+  renderAdmin();showScreen('screen-admin');
+}
 function showModal(id){document.getElementById(id).classList.add('show');}
 function closeModal(id){document.getElementById(id).classList.remove('show');}
 document.querySelectorAll('.modal-ov').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('show');}));
@@ -1135,6 +1186,7 @@ function renderDash(){
       if(dashT==='batch_q'&&i<wos.length-1) h+=`<button class="btn-sm out" onclick="event.stopPropagation();moveBatch('${wo.id}',1)">&darr;</button>`;
       if(dashT==='prod_q'&&i>0) h+=`<button class="btn-sm out" onclick="event.stopPropagation();moveProd('${wo.id}',-1)">&uarr;</button>`;
       if(dashT==='prod_q'&&i<wos.length-1) h+=`<button class="btn-sm out" onclick="event.stopPropagation();moveProd('${wo.id}',1)">&darr;</button>`;
+      h+=`<button class="btn-sm out" onclick="event.stopPropagation();deleteWO('${wo.id}')" style="color:var(--red);margin-left:auto;">&#10005; Delete</button>`;
       h+=`</div>`;
     }
     h+=`</div>`;
@@ -1154,6 +1206,26 @@ function moveProd(id,dir){
   const i=ws.findIndex(w=>w.id===id),j=i+dir;if(j<0||j>=ws.length)return;
   const t=ws[i].prodPos;ws[i].prodPos=ws[j].prodPos;ws[j].prodPos=t;
   save();renderDash();
+}
+
+function deleteWO(id){
+  const wo=S.workOrders.find(w=>w.id===id);
+  if(!wo)return;
+  if(wo.status==='production'||wo.status==='complete'){
+    toast('Cannot delete an active or completed batch','error');return;
+  }
+  if(!confirm('Delete '+wo.num+'? This cannot be undone.'))return;
+  S.workOrders=S.workOrders.filter(w=>w.id!==id);
+  delete S.batchRuns[id];
+  save();
+  try{
+    if(window._fb&&window._fb.deleteDoc){
+      const {db,doc,deleteDoc}=window._fb;
+      deleteDoc(doc(db,'batchRuns',id)).catch(e=>console.warn(e));
+    }
+  }catch(e){}
+  renderDash();
+  toast('Work order deleted','success');
 }
 
 function releaseToProd(id){
@@ -1643,6 +1715,44 @@ function renderAudit(){
 }
 
 // ─── ADMIN ────────────────────────────────────────
+function renderPDPanel(){
+  document.getElementById('pd-badge').textContent=S.user.name+' \u00b7 PD';
+  const b=document.getElementById('pd-body');
+  let h='';
+  // Recipes section
+  h+=`<div class="sec-hdr" style="margin-bottom:11px;"><div class="sec-title">Recipes (${RECIPES.length})</div><button class="btn-sm" onclick="showParser()">+ Parse WI PDF</button></div>`;
+  RECIPES.forEach(r=>{
+    const reg=lookupProduct(r.code)||{};
+    h+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 13px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:7px;">`;
+    h+=`<div><div style="font-weight:600;font-size:14px;">${r.name}</div><div style="font-family:var(--fm);font-size:11px;color:var(--text2);margin-top:2px;">${r.code} &middot; ${r.batchSize||'—'} &middot; ${r.storage||''} &middot; ${r.shelfLifeMonths?r.shelfLifeMonths+' months':''}</div></div>`;
+    h+=`<div style="font-size:11px;color:var(--text3);">${r.docRef||''}</div>`;
+    h+=`</div>`;
+  });
+  h+=`<div class="divider"></div>`;
+  // AI Settings
+  const keyOk=S.apiKey?true:false;
+  h+=`<div class="sec-hdr" style="margin-bottom:10px;"><div class="sec-title">AI Settings</div></div>`;
+  h+=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px;margin-bottom:9px;">`;
+  h+=`<div style="font-size:13px;font-weight:600;color:${keyOk?'var(--green)':'var(--orange)'};margin-bottom:8px;">${keyOk?'&#9989; API Key configured':'&#9888; No API key — parser will not work'}</div>`;
+  if(!keyOk){
+    h+=`<div class="fg"><div style="display:flex;gap:8px;"><input class="fi" id="pd-api-key" type="password" placeholder="sk-ant-api03-..." style="flex:1;font-family:var(--fm);font-size:12px;"/><button class="btn-sm" onclick="savePDAPIKey()">Save</button></div></div>`;
+  }
+  h+=`</div>`;
+  b.innerHTML=h;
+}
+
+function savePDAPIKey(){
+  const inp=document.getElementById('pd-api-key');
+  if(!inp||!inp.value.trim()){toast('Enter an API key','error');return;}
+  const key=inp.value.trim();
+  if(!key.startsWith('sk-ant-')){toast('Invalid key format','error');return;}
+  S.apiKey=key;
+  fbSave('config','apikey',{key});
+  save();
+  renderPDPanel();
+  toast('API key saved','success');
+}
+
 function renderAdmin(){
   let h=`<div class="sec-hdr" style="margin-bottom:11px;"><div class="sec-title">Operators</div><button class="btn-sm" onclick="addOp()">+ Add</button></div>`;
   S.operators.forEach(o=>{
@@ -1931,6 +2041,18 @@ function downloadBatchRecord(){
 
 </div>
 
+<!-- PD PANEL SCREEN -->
+<div id="screen-pd" class="screen">
+  <div class="topbar">
+    <div class="tbar-l">
+      <div class="ibtn" onclick="backToDash()">&#8592;</div>
+      <div class="tbar-logo">PD PANEL</div>
+    </div>
+    <div class="tbar-r"><div class="badge" id="pd-badge"></div></div>
+  </div>
+  <div class="admin-body" id="pd-body"></div>
+</div>
+
 <!-- RECIPE PARSER SCREEN -->
 <div id="screen-parser" class="screen">
   <div class="topbar">
@@ -2062,6 +2184,12 @@ function showParser(){
   if(!['admin','pd'].includes(S.user.role)){toast('PD or Admin only','error');return;}
   parserReset();
   showScreen('screen-parser');
+  // Set back button destination based on role
+  const backBtn=document.querySelector('#screen-parser .ibtn');
+  if(backBtn){
+    if(S.user.role==='pd') backBtn.setAttribute('onclick',"showScreen('screen-pd');renderPDPanel();");
+    else backBtn.setAttribute('onclick',"showScreen('screen-admin');renderAdmin();");
+  }
 }
 
 function parserReset(){
@@ -2391,7 +2519,8 @@ function saveRecipe(){
   fbSave('recipes', parsedRecipe.id, parsedRecipe);
   try{localStorage.setItem('tropico_recipes_v1',JSON.stringify(RECIPES));}catch(e){}
   parserReset();
-  showScreen('screen-admin');renderAdmin();
+  if(S.user.role==='pd'){showScreen('screen-pd');renderPDPanel();}
+  else{showScreen('screen-admin');renderAdmin();}
 }
 
 // ─── LABEL CHECKER ───────────────────────────────
