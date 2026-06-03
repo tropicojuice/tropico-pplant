@@ -2238,7 +2238,7 @@ RULES FOR sections:
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
+        model:'claude-sonnet-4-5',
         max_tokens:6000,
         system:systemPrompt,
         messages:[{role:'user',content:msgContent}]
@@ -2451,7 +2451,7 @@ async function checkLabel(){
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
+        model:'claude-sonnet-4-5',
         max_tokens:800,
         system:'You are a food safety label checker for Tropico Fruits Pty Ltd. Check the label photo against expected values and return ONLY valid JSON with no markdown. Format: {"pass":true/false,"details":"list each check on its own line starting with ✓ or ✗"}',
         messages:[{role:'user',content:[
