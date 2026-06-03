@@ -1716,7 +1716,8 @@ function renderAudit(){
 
 // ─── ADMIN ────────────────────────────────────────
 function renderPDPanel(){
-  document.getElementById('pd-badge').textContent=S.user.name+' \u00b7 PD';
+  const pdBadge=document.getElementById('pd-badge');
+  if(pdBadge) pdBadge.textContent=S.user.name+' \u00b7 PD';
   const b=document.getElementById('pd-body');
   let h='';
   // Recipes section
