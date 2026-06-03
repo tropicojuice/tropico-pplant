@@ -1390,6 +1390,7 @@ function renderBatching(r,run){
   const total=ingr.length;
   const done=doneIds.size;
   document.getElementById('r-prog').style.width=Math.round(done/total*100)+'%';
+  let h='';
 
   const whIngr=r.warehouseIngredients||[];
   const whDone=new Set(Object.keys(run.stepRecords).filter(k=>k.startsWith('wi')));
@@ -1713,7 +1714,10 @@ function renderQC(step,run){
   step.qcFields.forEach(f=>{
     const v=qd[f.key]||'';
     let ic='qci';
-    if(v&&f.min!==null){const n=parseFloat(v);ic+=(!isNaN(n)&&n>=f.min&&n<=f.max)?' pass':' fail';}
+    if(v&&(f.min!==null||f.max!==null||f.operator)){
+      const n=parseFloat(v);
+      if(!isNaN(n)) ic+=checkQCSpec(n,f)?' pass':' fail';
+    }
     // Use inputmode="decimal" for number fields, text for colour/acid
     const isNum=(f.min!==null);
     h+=`<div class="qc-cell">
@@ -1730,6 +1734,18 @@ function renderQC(step,run){
   return h;
 }
 
+function checkQCSpec(n, f){
+  // Handles: range (min+max), max only (<X), min only (>X), record only (null+null)
+  if(f.operator==='lt') return n < f.max;
+  if(f.operator==='lte') return n <= f.max;
+  if(f.operator==='gt') return n > f.min;
+  if(f.operator==='gte') return n >= f.min;
+  if(f.min!==null && f.max!==null) return n >= f.min && n <= f.max;
+  if(f.min===null && f.max!==null) return n <= f.max;
+  if(f.min!==null && f.max===null) return n >= f.min;
+  return true; // record only
+}
+
 function upQC(key,val){
   if(!curWO)return;
   const run=S.batchRuns[curWO.id];if(!run.qcData)run.qcData={};
@@ -1740,9 +1756,9 @@ function upQC(key,val){
     const r=RECIPES.find(x=>x.id===curWO.recipeId);
     const step=allSteps(r).find(s=>s.id==='qc1');
     const f=step.qcFields.find(x=>x.key===key);
-    if(f&&f.min!==null){
+    if(f&&(f.min!==null||f.max!==null||f.operator)){
       const n=parseFloat(val);
-      inp.className='qci'+(!isNaN(n)&&n>=f.min&&n<=f.max?' pass':val?' fail':'');
+      if(!isNaN(n)) inp.className='qci '+(checkQCSpec(n,f)?'pass':'fail');
     }
   }
   // Update banner without destroying inputs
@@ -1770,9 +1786,11 @@ function updateQCBanner(run){
   }
   if(allF){
     const pass=step.qcFields.every(f=>{
-      if(f.min===null)return true;
-      const n=parseFloat(qd[f.key]);
-      return !isNaN(n)&&n>=f.min&&n<=f.max;
+      if(f.min===null&&f.max===null)return true;
+      const v=qd[f.key];
+      if(!v)return true; // empty = not yet filled
+      const n=parseFloat(v);
+      return !isNaN(n)&&checkQCSpec(n,f);
     });
     banner.className='qc-banner '+(pass?'pass':'fail');
     banner.textContent=pass?'✓ All within spec — PASS':'✗ Parameter(s) out of spec — Contact QA';
@@ -2519,7 +2537,7 @@ Return this exact JSON structure:
     {"id":"bi1","code":"ITEM_CODE","name":"Ingredient name","qty":"quantity as number string","qtyPer1kg":"ratio to 4dp e.g. 0.4762","unit":"Kg or L","desc":"full description"}
   ],
   "qcSpecs": {
-    "brix": {"spec":"e.g. <14 or 43-48","min":null,"max":14},
+    "brix": {"spec":"e.g. <14","operator":"lt","min":null,"max":14},
     "acid": {"spec":"Record only","min":null,"max":null},
     "ph": {"spec":"3.9-4.2","min":3.9,"max":4.2},
     "viscosity": {"spec":"5-7","min":5,"max":7},
@@ -2550,6 +2568,10 @@ RULES FOR sections:
 - Gate steps (supervisor/QA approval): gate:true, role:'supervisor' or 'qa'
 - QC step must have id:'qc1', type:'qc', and qcFields array with keys: brix, acid, ph, visc, colour
 - qcFields must use specs from QC sheet if provided, otherwise from product register
+- For specs like "<14": set operator:"lt", min:null, max:14
+- For specs like ">5": set operator:"gt", min:5, max:null
+- For specs like "43-48": set min:43, max:48, no operator field
+- For "Record only": set min:null, max:null, no operator field
 - Use <strong> tags around ingredient names, codes, and key values in step desc fields
 - Extract ALL numbered steps from the WI exactly — do not summarise or skip any
 - Step IDs: s1,s2 for setup; m1,m2 for mix; qc1 for QC; l1,l2 for labels; h1,h2 for hipex; p1,p2 for pack
@@ -2698,6 +2720,22 @@ function addParsedIngredient(){
   parsedRecipe.batchIngredients.push({id:'bi'+(i+1),code:'',name:'',qty:'',unit:'Kg',desc:''});
   renderParserPreview();
   setTimeout(()=>{const rows=document.querySelectorAll('.ing-row');if(rows.length)rows[rows.length-1].querySelector('input').focus();},100);
+}
+
+function mergeQCField(key, label, qs, defaults){
+  if(!qs) return {key, label, ...defaults};
+  // Parse operator from spec string if not explicitly set
+  let op=qs.operator||null;
+  let mn=qs.min!==undefined?qs.min:defaults.min;
+  let mx=qs.max!==undefined?qs.max:defaults.max;
+  const spec=qs.spec||defaults.spec||'';
+  if(!op){
+    if(spec.startsWith('<'))  { op='lt'; mx=parseFloat(spec.replace('<','').trim())||mx; mn=null; }
+    else if(spec.startsWith('<=')){ op='lte'; mx=parseFloat(spec.replace('<=','').trim())||mx; mn=null; }
+    else if(spec.startsWith('>')){ op='gt'; mn=parseFloat(spec.replace('>','').trim())||mn; mx=null; }
+    else if(spec.startsWith('>=')){ op='gte'; mn=parseFloat(spec.replace('>=','').trim())||mn; mx=null; }
+  }
+  return {key, label, spec, min:mn, max:mx, operator:op||undefined};
 }
 
 function saveRecipe(){
