@@ -52,9 +52,9 @@
   .audit-body{padding:15px;}
   .admin-body{padding:15px;}
   /* Fixed header screens use flex */
-  #screen-dashboard,#screen-run,#screen-audit,#screen-admin,#screen-parser,#screen-pd{display:none;flex-direction:column;height:100vh;height:100dvh;}
-  #screen-dashboard.active,#screen-run.active,#screen-audit.active,#screen-admin.active,#screen-parser.active,#screen-pd.active{display:flex;}
-  #screen-dashboard .dash-body,#screen-run .run-body,#screen-audit .audit-body,#screen-admin .admin-body,#screen-pd .admin-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  #screen-dashboard,#screen-run,#screen-audit,#screen-admin,#screen-parser,#screen-pd,#screen-pcs{display:none;flex-direction:column;height:100vh;height:100dvh;}
+  #screen-dashboard.active,#screen-run.active,#screen-audit.active,#screen-admin.active,#screen-parser.active,#screen-pd.active,#screen-pcs.active{display:flex;}
+  #screen-dashboard .dash-body,#screen-run .run-body,#screen-audit .audit-body,#screen-admin .admin-body,#screen-pd .admin-body,#screen-pcs .admin-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
   #screen-parser > div:last-child{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 
   /* LOGIN */
@@ -280,6 +280,24 @@
   .toast.success{border-color:var(--green);color:var(--green);}
   .toast.error{border-color:var(--red);color:var(--red);}
 
+  /* PROCESSING CHECK SHEET */
+  #screen-pcs,#screen-pcs.active{display:flex;flex-direction:column;height:100vh;height:100dvh;}
+  #screen-pcs .admin-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  .pcs-section{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden;}
+  .pcs-section-hdr{padding:10px 13px;background:var(--surface2);border-bottom:1px solid var(--border);font-family:var(--fh);font-size:14px;font-weight:700;letter-spacing:0.5px;display:flex;align-items:center;gap:8px;}
+  .pcs-section-body{padding:12px 13px;}
+  .pcs-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);}
+  .pcs-row:last-child{border-bottom:none;}
+  .pcs-label{font-size:13px;color:var(--text);flex:1.5;}
+  .pcs-inp{flex:1;background:var(--surface3);border:1.5px solid var(--border2);border-radius:7px;padding:8px 10px;color:var(--text);font-family:var(--fm);font-size:13px;outline:none;}
+  .pcs-inp:focus{border-color:var(--accent);}
+  .pcs-unit{font-size:11px;color:var(--text2);white-space:nowrap;}
+  .pcs-yn{display:flex;gap:6px;}
+  .pcs-yn-btn{padding:6px 14px;border-radius:6px;font-family:var(--fh);font-size:13px;font-weight:700;border:1.5px solid var(--border2);background:var(--surface3);color:var(--text2);cursor:pointer;}
+  .pcs-yn-btn.yes-active{background:var(--green-dim);border-color:var(--green);color:var(--green);}
+  .pcs-yn-btn.no-active{background:var(--red-dim);border-color:var(--red);color:var(--red);}
+  .pcs-temp-grid{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px;align-items:center;}
+  .pcs-temp-label{font-size:12px;color:var(--text2);font-weight:600;}
   /* PARSER */
   .doc-slot{display:flex;align-items:center;gap:12px;padding:13px;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);margin-bottom:9px;transition:all 0.15s;}
   .doc-slot.loaded{border-color:rgba(46,204,113,0.4);background:rgba(46,204,113,0.04);}
@@ -373,7 +391,7 @@
       <div class="ibtn" onclick="showAudit()">&#128203;</div>
     </div>
   </div>
-  <div class="run-hdr">
+  <div class="run-hdr" id="run-hdr-div">
     <div class="run-product" id="r-product"></div>
     <div class="run-meta">
       <div class="rm">WO <span id="r-wo"></span></div>
@@ -382,6 +400,7 @@
       <div class="rm">Size <span id="r-size"></span></div>
     </div>
     <div class="prog-wrap"><div class="prog-fill" id="r-prog" style="width:0%"></div></div>
+    <div style="margin-top:8px;"><button onclick="showProcessingCheckSheet()" style="padding:6px 12px;background:var(--surface3);border:1px solid var(--border2);border-radius:6px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;" id="pcs-btn">&#128203; Processing Check Sheet</button></div>
   </div>
   <div class="run-body" id="run-body"></div>
 </div>
@@ -420,6 +439,22 @@
   <div class="admin-body" id="pd-body"></div>
 </div>
 
+
+
+<!-- PROCESSING CHECK SHEET SCREEN -->
+<div id="screen-pcs" class="screen">
+  <div class="topbar">
+    <div class="tbar-l">
+      <div class="ibtn" onclick="backToRun()">&#8592;</div>
+      <div class="tbar-logo">CHECK SHEET</div>
+    </div>
+    <div class="tbar-r">
+      <div class="badge" id="pcs-badge"></div>
+      <div class="ibtn" onclick="savePCSAndBack()" style="background:var(--green-dim);border-color:var(--green);color:var(--green);">&#10003;</div>
+    </div>
+  </div>
+  <div class="admin-body" id="pcs-body"></div>
+</div>
 
 <!-- ADD WO MODAL -->
 <div class="modal-ov" id="modal-add-wo">
@@ -556,43 +591,47 @@ const COCO04P = {
 
   // PRODUCTION SECTIONS
   sections:[
+    // Label check — morning sign-off BEFORE mixing
+    {id:'morning', name:'Morning Sign-Off', col:'#e74c3c', type:'mixed',
+     steps:[
+       {id:'l0',num:'AM',desc:'<strong>LABEL CHECK</strong>: Print batch labels. AI Label Check required before production begins.',type:'label_check',gate:true,role:'qa'},
+     ]},
     {id:'setup', name:'Machine Setup', col:'#3498db', type:'setup',
      steps:[
        {id:'s1',num:'S1',desc:'Set up <strong>Inline Filter</strong> housings: Instantiser <strong>1.6mm</strong> | Recirculation <strong>DO NOT USE</strong> | Transfer <strong>Nil</strong> | Filling <strong>No</strong>'},
-       {id:'s2',num:'S2',desc:'Set <strong>Kettle</strong>: Pre-Mix temp <strong>60\u00b0C</strong> | Scraper speed <strong>90%</strong> | Mixer speed <strong>80%</strong>'},
-       {id:'s3',num:'S3',desc:'Set <strong>Instantiser Speed</strong> to <strong>50%</strong>'},
+       {id:'s2',num:'S2',desc:'Set <strong>Kettle</strong>: Pre-Mix temp <strong>60°C</strong> | Scraper speed <strong>90%</strong> | Mixer speed <strong>80%</strong>'},
      ]},
-    {id:'mix', name:'Batch Mixing \u2014 1000kg', col:'#f39c12', type:'mixed',
+    {id:'mix', name:'Batch Mixing — 1000kg', col:'#f39c12', type:'mixed',
      steps:[
-       {id:'m1',num:'1',desc:'Add <strong>397 L Ambient WATER</strong> (OWWATT01) to the kettle',type:'ingredient',sign:true,inpLabel:'Actual volume added',inpUnit:'L',target:'397 L',prodOnly:true},
-       {id:'m2',num:'2',desc:'Confirm kettle set up per setup steps above',type:'setup_step',sign:false},
-       {id:'m3',num:'3',desc:'Add <strong>SUGAR</strong> (SUGARS03) \u2014 <strong>397 Kg</strong>',type:'ingredient',sign:true,inpLabel:'Actual weight added',inpUnit:'Kg',target:'397 Kg'},
-       {id:'m4',num:'4',desc:'Add <strong>ACIDITY REGULATOR</strong> (ACREDUC01) \u2014 <strong>1.35 Kg</strong>',type:'ingredient',sign:true,inpLabel:'Actual weight added',inpUnit:'Kg',target:'1.35 Kg'},
-       {id:'m5',num:'5',desc:'Add <strong>COCONUT</strong> (ODCOCO03) \u2014 <strong>60.3 Kg</strong>',type:'ingredient',sign:true,inpLabel:'Actual weight added',inpUnit:'Kg',target:'60.3 Kg'},
-       {id:'m6',num:'6',desc:'Once kettle reaches at least <strong>50\u00b0C</strong>, set Instantiser to <strong>50% speed</strong>. Record temperature.',type:'temp',sign:true,inpLabel:'Kettle temp',inpUnit:'\u00b0C',target:'\u2265 50\u00b0C'},
-       {id:'m7',num:'7',desc:'Add <strong>100 L Ambient WATER</strong> for Starch to Instantiser',type:'ingredient',sign:true,inpLabel:'Actual volume added',inpUnit:'L',target:'100 L',prodOnly:true},
-       {id:'m8',num:'8',desc:'Slowly add <strong>STARCH</strong> (STSTAR12) \u2014 <strong>43 Kg</strong> \u2014 mix until free of lumps',type:'ingredient',sign:true,inpLabel:'Actual weight added',inpUnit:'Kg',target:'43 Kg'},
-       {id:'m9',num:'9',desc:'Pump Starch slurry to kettle at <strong>55\u201361\u00b0C</strong>. Record actual temperature.',type:'temp',sign:true,inpLabel:'Kettle temp when starch added',inpUnit:'\u00b0C',target:'55\u201361\u00b0C'},
-       {id:'m10',num:'10',desc:'Flush pipes \u2014 add allocated <strong>20 L WATER</strong> to instantiser, pump to kettle',type:'ingredient',sign:true,inpLabel:'Flush confirmed',inpUnit:'',target:'20 L flush',prodOnly:true},
-       {id:'m11',num:'11',desc:'After <strong>5 min mixing at 60\u00b0C</strong>, take sample to lab for QC testing. Record time.',type:'qc_trigger',sign:true,inpLabel:'Sample taken at time',inpUnit:''},
+       {id:'m1',num:'1',desc:'Add <strong>397 L Ambient WATER</strong> to kettle. Total batch water: <strong>498 L</strong>',type:'ingredient',sign:true,inpLabel:'Actual volume added',inpUnit:'L',target:'397 L',prodOnly:true},
+       {id:'m2',num:'2',desc:'Confirm kettle set up per setup section above',type:'setup_step',sign:true},
+       {id:'m3',num:'3',desc:'Add <strong>SUGAR</strong> (SUGARS03) — <strong>397 Kg</strong>',type:'ingredient',sign:true,inpLabel:'Actual weight added',inpUnit:'Kg',target:'397 Kg'},
+       {id:'m4',num:'4',desc:'Add <strong>ACIDITY REGULATOR</strong> (ACREDUC01) — <strong>1.35 Kg</strong>',type:'ingredient',sign:true,inpLabel:'Actual weight added',inpUnit:'Kg',target:'1.35 Kg'},
+       {id:'m5',num:'5',desc:'Add <strong>COCONUT</strong> (ODCOCO03) — <strong>60.3 Kg</strong>',type:'ingredient',sign:true,inpLabel:'Actual weight added',inpUnit:'Kg',target:'60.3 Kg'},
+       {id:'m6',num:'6',desc:'Once kettle reaches at least <strong>50°C</strong>, record temperature',type:'temp',sign:true,inpLabel:'Kettle temp at this point',inpUnit:'°C',target:'≥ 50°C'},
+       {id:'m7',num:'7',desc:'Add <strong>100 L Ambient WATER</strong> for Starch to Instantiser',type:'ingredient',sign:true,inpLabel:'Actual volume added',inpUnit:'L',target:'100 L Ambient',prodOnly:true},
+       {id:'m7b',num:'7b',desc:'Set <strong>Instantiser Speed</strong> to <strong>50%</strong>',type:'setup_step',sign:true},
+       {id:'m8',num:'8',desc:'Slowly add <strong>STARCH</strong> (STSTAR12) — <strong>43 Kg</strong> — mix until free of lumps',type:'ingredient',sign:true,inpLabel:'Actual weight added',inpUnit:'Kg',target:'43 Kg'},
+       {id:'m9',num:'9',desc:'Pump Starch slurry to kettle at <strong>55–61°C</strong>. Record actual temperature.',type:'temp',sign:true,inpLabel:'Kettle temp when starch added',inpUnit:'°C',target:'55–61°C'},
+       {id:'m10',num:'10',desc:'Flush pipes — add allocated <strong>20 L WATER</strong> to instantiser, pump to kettle',type:'ingredient',sign:true,inpLabel:'Flush confirmed',inpUnit:'',target:'20 L flush',prodOnly:true},
+       {id:'m11',num:'11',desc:'Mix at <strong>60°C</strong> for at least <strong>10 minutes</strong> before taking QC sample. Start countdown when temperature is confirmed.',type:'countdown',sign:true,countdownMins:10,inpLabel:'Kettle temp when countdown started',inpUnit:'°C'},
      ]},
     {id:'qc', name:'QC In-Line Testing', col:'#a87fd6', type:'single',
      steps:[
-       {id:'qc1',num:'QC',desc:'Record QC results. All parameters must be within spec before transfer.',type:'qc',gate:true,role:'qa',
+       {id:'qc1',num:'QC',desc:'Record QC results. Out of spec results will alert PD. Corrective action required before transfer.',type:'qc',gate:true,role:'qa',
         qcFields:[
-          {key:'brix',label:'BRIX',spec:'43\u201348',min:43,max:48},
+          {key:'brix',label:'BRIX',spec:'43–48',min:43,max:48},
           {key:'acid',label:'ACID',spec:'Record only',min:null,max:null},
-          {key:'ph',label:'pH',spec:'3.75\u20134',min:3.75,max:4},
-          {key:'visc',label:'Viscosity',spec:'5\u20138',min:5,max:8},
-          {key:'colour',label:'Colour',spec:'Off-white + coconut',min:null,max:null},
+          {key:'ph',label:'pH',spec:'3.75–4',min:3.75,max:4},
+          {key:'visc',label:'Viscosity',spec:'5–8',min:5,max:8},
+          {key:'colour',label:'Colour',spec:'Off-white + coconut pieces',min:null,max:null},
         ]}
      ]},
-    {id:'labels_flav', name:'Labels & Flavours', col:'#e74c3c', type:'mixed',
+    {id:'labels_flav', name:'Flavours & Retest', col:'#e74c3c', type:'mixed',
      steps:[
-       {id:'l1',num:'12',desc:'Print batch labels. <strong>AI Label Check</strong> required before sign-off. Take photo of printed label for verification.',type:'label_check',gate:true,role:'qa'},
-       {id:'l2',num:'13',desc:'Allow <strong>5 min mixing</strong> after any additions before re-sampling',type:'setup_step'},
-       {id:'l3',num:'14',desc:'Sample meets parameters, <strong>approved by Supervisor or R&D</strong>. Proceed.',type:'gate',gate:true,role:'supervisor'},
-       {id:'l4',num:'15',desc:'Add <strong>FLAVOUR</strong> (ESCOCO04) \u2014 <strong>6.1 Kg</strong>. Rinse container with 1L water.',type:'ingredient',sign:true,inpLabel:'Actual weight added',inpUnit:'Kg',target:'6.1 Kg'},
+       {id:'l2',num:'13',desc:'Allow <strong>5 min mixing</strong> after any additions before re-sampling',type:'setup_step',sign:true},
+       {id:'l3',num:'14',desc:'Sample meets parameters — <strong>approved by Supervisor or R&D</strong>. Proceed to flavours.',type:'gate',gate:true,role:'supervisor'},
+       {id:'l4a',num:'15',desc:'Add <strong>FLAVOUR — ESCOCO04</strong> — <strong>6.1 Kg</strong>. Rinse container with 1L water.',type:'ingredient',sign:true,inpLabel:'Actual weight added — ESCOCO04',inpUnit:'Kg',target:'6.1 Kg'},
      ]},
     {id:'hipex', name:'HIPEX Checks & Transfer', col:'#1abc9c', type:'setup',
      steps:[
@@ -602,10 +641,10 @@ const COCO04P = {
      ]},
     {id:'pack', name:'Samples, Packing & Labels', col:'#2ecc71', type:'mixed',
      steps:[
-       {id:'p1',num:'18',desc:'<strong>SAMPLES (QA)</strong>: (3) 1Kg bags correctly labelled + (1) 1Kg PRE-APPROVAL bag correctly labelled.',type:'gate',gate:true,role:'qa'},
-       {id:'p2',num:'19',desc:'<strong>PACK</strong>: 1000Kg into 1000L bags (PBASEP26/27). Into Intercon (CHEPUNI01). Attach 2 labels. Place PRE-APPROVAL sample on top under lid.',type:'setup_step'},
-       {id:'p3',num:'20',desc:'<strong>LABELS</strong>: "Refrigerated only" label applied correctly. Storage: Refrigerated.',type:'setup_step'},
-       {id:'p4',num:'FIN',desc:'<strong>SUPERVISOR FINAL SIGN-OFF</strong>: Supervisor has checked complete work order.',type:'gate',gate:true,role:'supervisor'},
+       {id:'p1',num:'18',desc:'<strong>SAMPLES (QA)</strong>: Collect (3) 1Kg QA bags correctly labelled. Collect (1) 1Kg PRE-APPROVAL bag correctly labelled.',type:'gate',gate:true,role:'qa'},
+       {id:'p2',num:'19',desc:'<strong>START PACKING</strong>: Pack 1000Kg into 1000L bags (PBASEP26/27). Into Intercon (CHEPUNI01). Attach 2 labels. Place PRE-APPROVAL sample on top under lid.',type:'packing_timer',sign:true,inpLabel:'Total weight packed',inpUnit:'Kg',target:'1000 Kg'},
+       {id:'p3',num:'20',desc:'<strong>LABELS</strong>: Apply “Refrigerated only” label. Confirm applied correctly.',type:'setup_step',sign:true},
+       {id:'p4',num:'FIN',desc:'<strong>SUPERVISOR FINAL SIGN-OFF</strong>: Supervisor has checked the complete work order before product is released.',type:'gate',gate:true,role:'supervisor'},
      ]},
   ]
 };
@@ -1060,8 +1099,9 @@ async function initApp(){
     }
   }catch(e){}
 
-  // Load API key from Firebase
+  // Load API key and PD alerts from Firebase
   await loadAPIKey();
+  await loadPDAlerts();
 
   // Subscribe to live state changes so all devices stay in sync
   fbSubscribeState(remoteState=>{
@@ -1167,6 +1207,11 @@ function doLogin(){
   if(op.pin!==String(loginPin)){document.getElementById('l-err').classList.add('show');loginPin='';dots('l-dots',loginPin,3);document.getElementById('l-btn').disabled=true;return;}
   S.user=op;save();
   document.getElementById('d-badge').textContent=op.name+' \u00b7 '+op.role;
+  // Show PD alert badge if there are unread alerts
+  if(['pd','admin'].includes(op.role) && S.pdAlerts && S.pdAlerts.filter(a=>!a.read).length>0){
+    const unread=S.pdAlerts.filter(a=>!a.read).length;
+    document.getElementById('d-badge').textContent+=` ⚠️ ${unread} alert${unread>1?'s':''}`;
+  }
   document.getElementById('fab').style.display=['admin','planner','pd'].includes(op.role)?'block':'none';
   showScreen('screen-dashboard');renderDash();
 }
@@ -1251,10 +1296,33 @@ function deleteWO(id){
 
 function releaseToProd(id){
   const wo=S.workOrders.find(w=>w.id===id);if(!wo)return;
-  const existProd=S.workOrders.filter(w=>['production_queue','production'].includes(w.status));
-  wo.status='production_queue';
-  wo.prodPos=existProd.reduce((m,w)=>Math.max(m,w.prodPos||0),0)+1;
-  save();renderDash();toast('Released to production queue','success');
+  const run=S.batchRuns[id];
+  const r=RECIPES.find(x=>x.id===wo.recipeId);
+  // Check if PD review already done
+  if(run && run.pdReview && run.pdReview.approvedBy){
+    // Already reviewed — just release
+    const existProd=S.workOrders.filter(w=>['production_queue','production'].includes(w.status));
+    wo.status='production_queue';
+    wo.prodPos=existProd.reduce((m,w)=>Math.max(m,w.prodPos||0),0)+1;
+    save();renderDash();toast('Released to production queue','success');
+    return;
+  }
+  // Show PD review modal first
+  if(!['pd','admin'].includes(S.user.role)){
+    toast('PD or Admin must review before releasing','error');return;
+  }
+  if(!run){toast('No batch data found','error');return;}
+  curWO=wo;
+  // Show review screen
+  const body=document.getElementById('run-body');
+  document.getElementById('r-product').textContent=r?r.name:'—';
+  document.getElementById('r-wo').textContent=wo.num;
+  document.getElementById('r-batchnum').textContent='#'+wo.batchNum;
+  document.getElementById('r-code').textContent=wo.recipeId;
+  document.getElementById('r-size').textContent=(wo.batchKg?wo.batchKg+'Kg':r?.batchSize)||'—';
+  document.getElementById('run-mode-label').textContent='PD REVIEW';
+  body.innerHTML=renderPDBatchReview(wo,run,r);
+  showScreen('screen-run');
 }
 
 // ─── ADD WO ───────────────────────────────────────
@@ -1654,6 +1722,8 @@ function renderProduction(r,run){
           h+=`<div class="sactions">`;
           if(step.type==='qc') h+=renderQC(step,run);
           else if(step.type==='label_check') h+=renderLabelCheck(step,run);
+          else if(step.type==='countdown') h+=renderCountdown(step,run);
+          else if(step.type==='packing_timer') h+=renderPackingTimer(step,run);
           else{
             if(step.inpLabel) h+=`<div class="inp-row"><input class="sinp" id="inp-${step.id}" placeholder="${step.inpLabel}" />${step.inpUnit?`<div class="iunit">${step.inpUnit}</div>`:''}</div>`;
           }
@@ -1731,6 +1801,10 @@ function renderQC(step,run){
   h+=`</div>`;
   // Banner placeholder — populated dynamically by updateQCBanner
   h+=`<div id="qc-result-banner" class="qc-banner"></div>`;
+  // Corrective action panel if applicable
+  if(run && run.correctiveAction && !run.correctiveAction.complete){
+    h+=renderCorrectiveAction(run);
+  }
   return h;
 }
 
@@ -1771,6 +1845,16 @@ function updateQCBanner(run){
   if(!step)return;
   const qd=run.qcData||{};
   const allF=step.qcFields.every(f=>qd[f.key]&&qd[f.key].trim());
+  // Alert PD if any critical fields out of spec
+  if(allF && curWO){
+    const failedFields=step.qcFields.filter(f=>{
+      if(f.min===null&&f.max===null)return false;
+      const v=qd[f.key];if(!v)return false;
+      const n=parseFloat(v);
+      return isNaN(n)||!checkQCSpec(n,f);
+    }).map(f=>f.label+': '+qd[f.key]);
+    if(failedFields.length>0) flagOutOfSpec(curWO.recipeId,curWO.batchNum,curWO.num,failedFields);
+  }
   let banner=document.getElementById('qc-result-banner');
   if(!banner){
     // Create it if not exists
@@ -1911,6 +1995,19 @@ function renderPDPanel(){
   if(pdBadge) pdBadge.textContent=S.user.name+' \u00b7 PD';
   const b=document.getElementById('pd-body');
   let h='';
+  // PD Alerts
+  const alerts=(S.pdAlerts||[]).filter(a=>!a.read);
+  if(alerts.length>0){
+    h+=`<div class="sec-hdr" style="margin-bottom:10px;"><div class="sec-title" style="color:var(--red);">&#9888; QC Alerts (${alerts.length})</div><button class="btn-sm out" style="font-size:11px;" onclick="clearPDAlerts()">Clear All</button></div>`;
+    alerts.forEach(a=>{
+      h+=`<div style="background:var(--red-dim);border:1px solid rgba(231,76,60,0.3);border-radius:8px;padding:10px 13px;margin-bottom:8px;">`;
+      h+=`<div style="font-weight:700;font-size:13px;color:var(--red);">&#9888; Out of Spec — ${a.woNum} Batch #${a.batchNum}</div>`;
+      h+=`<div style="font-size:12px;color:var(--text2);margin-top:4px;">${a.failedFields.join(' | ')}</div>`;
+      h+=`<div style="font-size:11px;color:var(--text3);margin-top:3px;font-family:var(--fm);">${fmt(a.ts)}</div>`;
+      h+=`</div>`;
+    });
+    h+=`<div class="divider"></div>`;
+  }
   // Recipes section
   h+=`<div class="sec-hdr" style="margin-bottom:11px;"><div class="sec-title">Recipes (${RECIPES.length})</div><button class="btn-sm" onclick="showParser()">+ Parse WI PDF</button></div>`;
   RECIPES.forEach(r=>{
@@ -1931,6 +2028,15 @@ function renderPDPanel(){
   }
   h+=`</div>`;
   b.innerHTML=h;
+}
+
+function clearPDAlerts(){
+  if(!S.pdAlerts)return;
+  S.pdAlerts.forEach(a=>a.read=true);
+  fbSave('config','pd_alerts',{alerts:S.pdAlerts});
+  save();
+  renderPDPanel();
+  toast('Alerts cleared','success');
 }
 
 function savePDAPIKey(){
@@ -2756,6 +2862,500 @@ function saveRecipe(){
   parserReset();
   if(S.user.role==='pd'){showScreen('screen-pd');renderPDPanel();}
   else{showScreen('screen-admin');renderAdmin();}
+}
+
+
+// ─── COUNTDOWN TIMER ─────────────────────────────
+let countdownInterval = null;
+
+function renderCountdown(step, run){
+  const cd = run.countdowns && run.countdowns[step.id];
+  let h = '';
+
+  // Temp input
+  h += `<div class="inp-row">
+    <input class="sinp" id="inp-${step.id}" placeholder="${step.inpLabel||'Temperature'}" type="text" inputmode="decimal" ${cd&&cd.startTs?`value="${cd.tempVal||''}" readonly`:''} />
+    ${step.inpUnit?`<div class="iunit">${step.inpUnit}</div>`:''}
+  </div>`;
+
+  if(!cd || !cd.startTs){
+    // Not started yet
+    h += `<button class="bsign" style="background:var(--teal);color:#000;" onclick="startCountdown('${step.id}',${step.countdownMins||10})">
+      &#9654; Start ${step.countdownMins||10} Minute Countdown
+    </button>`;
+  } else if(cd.complete){
+    // Countdown finished
+    h += `<div style="background:var(--green-dim);border:1px solid rgba(46,204,113,0.3);border-radius:8px;padding:10px 13px;margin-bottom:8px;text-align:center;">
+      <div style="font-weight:700;color:var(--green);font-size:16px;">&#9989; ${step.countdownMins||10} minutes complete</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:3px;">Started: ${fmt(cd.startTs)} &mdash; Finished: ${fmt(cd.endTs)}</div>
+    </div>`;
+  } else {
+    // Running
+    const elapsed = Math.floor((Date.now() - new Date(cd.startTs).getTime()) / 1000);
+    const total = (step.countdownMins||10) * 60;
+    const remaining = Math.max(0, total - elapsed);
+    const mins = Math.floor(remaining/60);
+    const secs = remaining % 60;
+    const pct = Math.min(100, Math.round(elapsed/total*100));
+    h += `<div style="background:var(--surface3);border:1px solid var(--border2);border-radius:8px;padding:12px 14px;margin-bottom:8px;" id="cd-display-${step.id}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-family:var(--fm);font-size:28px;font-weight:700;color:var(--accent);">${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}</div>
+        <div style="font-size:12px;color:var(--text2);">${pct}% complete</div>
+      </div>
+      <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:3px;transition:width 1s;"></div>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-top:6px;">Started at ${fmt(cd.startTs)}</div>
+    </div>`;
+    // Auto-tick
+    if(!countdownInterval){
+      countdownInterval = setInterval(()=>tickCountdowns(), 1000);
+    }
+  }
+  return h;
+}
+
+function startCountdown(stepId, mins){
+  const tempInp = document.getElementById('inp-'+stepId);
+  const tempVal = tempInp ? tempInp.value.trim() : '';
+  if(!tempVal){ toast('Enter temperature first','error'); return; }
+
+  const run = S.batchRuns[curWO.id];
+  if(!run.countdowns) run.countdowns = {};
+  run.countdowns[stepId] = {
+    startTs: new Date().toISOString(),
+    endTs: null,
+    complete: false,
+    mins,
+    tempVal
+  };
+  // Schedule completion
+  setTimeout(()=>completeCountdown(stepId), mins * 60 * 1000);
+  saveBatchRun(curWO.id);
+  renderRun();
+  toast(`${mins} minute countdown started`, 'success');
+  countdownInterval = setInterval(()=>tickCountdowns(), 1000);
+}
+
+function tickCountdowns(){
+  if(!curWO) return;
+  const run = S.batchRuns[curWO.id];
+  if(!run || !run.countdowns) return;
+  let anyRunning = false;
+  Object.entries(run.countdowns).forEach(([stepId, cd])=>{
+    if(cd && cd.startTs && !cd.complete){
+      anyRunning = true;
+      const elapsed = Math.floor((Date.now() - new Date(cd.startTs).getTime()) / 1000);
+      const total = cd.mins * 60;
+      const remaining = Math.max(0, total - elapsed);
+      if(remaining <= 0){
+        completeCountdown(stepId);
+      } else {
+        // Update display in place without full re-render
+        const el = document.getElementById('cd-display-'+stepId);
+        if(el){
+          const mins = Math.floor(remaining/60);
+          const secs = remaining % 60;
+          const pct = Math.min(100, Math.round(elapsed/total*100));
+          el.querySelector('[style*="font-size:28px"]').textContent = String(mins).padStart(2,'0')+':'+String(secs).padStart(2,'0');
+          el.querySelector('[style*="font-size:12px"][style*="color:var(--text2)"]').textContent = pct+'% complete';
+          const bar = el.querySelector('[style*="background:var(--accent)"]');
+          if(bar) bar.style.width = pct+'%';
+        }
+      }
+    }
+  });
+  if(!anyRunning && countdownInterval){
+    clearInterval(countdownInterval);
+    countdownInterval = null;
+  }
+}
+
+function completeCountdown(stepId){
+  if(!curWO) return;
+  const run = S.batchRuns[curWO.id];
+  if(!run.countdowns || !run.countdowns[stepId]) return;
+  run.countdowns[stepId].complete = true;
+  run.countdowns[stepId].endTs = new Date().toISOString();
+  saveBatchRun(curWO.id);
+  toast('Countdown complete — ready to take QC sample', 'success');
+  renderRun();
+}
+
+// ─── PACKING TIMER ────────────────────────────────
+function renderPackingTimer(step, run){
+  const pt = run.packingTimer || {};
+  let h = '';
+
+  if(!pt.startTs){
+    h += `<button class="bsign" style="background:var(--green);color:#000;" onclick="startPackingTimer()">
+      &#9654; Start Packing
+    </button>`;
+  } else if(pt.endTs){
+    // Completed
+    const diffMs = new Date(pt.endTs) - new Date(pt.startTs);
+    const diffMin = Math.round(diffMs/60000);
+    const dur = diffMin < 60 ? diffMin+'min' : Math.floor(diffMin/60)+'h '+(diffMin%60>0?diffMin%60+'min':'');
+    h += `<div style="background:var(--green-dim);border:1px solid rgba(46,204,113,0.3);border-radius:8px;padding:10px 13px;margin-bottom:8px;">
+      <div style="font-weight:700;color:var(--green);">&#9989; Packing Complete &mdash; ${dur}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:3px;">Start: ${fmt(pt.startTs)} &mdash; End: ${fmt(pt.endTs)}</div>
+    </div>`;
+    h += `<div class="inp-row">
+      <input class="sinp" id="inp-${step.id}" value="${pt.totalWeight||''}" placeholder="Total weight packed" type="text" inputmode="decimal"/>
+      <div class="iunit">Kg</div>
+    </div>`;
+  } else {
+    // Running
+    const elapsed = Math.floor((Date.now() - new Date(pt.startTs).getTime()) / 1000);
+    const mins = Math.floor(elapsed/60);
+    const secs = elapsed % 60;
+    h += `<div style="background:var(--surface3);border:1px solid var(--border2);border-radius:8px;padding:12px 14px;margin-bottom:8px;" id="packing-timer-display">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:13px;color:var(--text2);">Packing in progress</div>
+        <div style="font-family:var(--fm);font-size:24px;font-weight:700;color:var(--green);" id="packing-elapsed">${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}</div>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-top:4px;">Started: ${fmt(pt.startTs)}</div>
+    </div>`;
+    h += `<button class="bsign" style="background:var(--red);color:#fff;margin-bottom:8px;" onclick="endPackingTimer()">&#9632; End Packing</button>`;
+    // Tick
+    if(!window._packingTick){
+      window._packingTick = setInterval(()=>{
+        if(!curWO) return;
+        const run = S.batchRuns[curWO.id];
+        if(!run||!run.packingTimer||run.packingTimer.endTs){ clearInterval(window._packingTick); window._packingTick=null; return; }
+        const el = document.getElementById('packing-elapsed');
+        if(el){
+          const e2 = Math.floor((Date.now()-new Date(run.packingTimer.startTs).getTime())/1000);
+          el.textContent = String(Math.floor(e2/60)).padStart(2,'0')+':'+String(e2%60).padStart(2,'0');
+        }
+      }, 1000);
+    }
+  }
+  return h;
+}
+
+function startPackingTimer(){
+  const run = S.batchRuns[curWO.id];
+  run.packingTimer = { startTs: new Date().toISOString(), endTs: null, totalWeight: '' };
+  saveBatchRun(curWO.id);
+  renderRun();
+  toast('Packing timer started', 'success');
+}
+
+function endPackingTimer(){
+  const run = S.batchRuns[curWO.id];
+  if(!run.packingTimer) return;
+  run.packingTimer.endTs = new Date().toISOString();
+  saveBatchRun(curWO.id);
+  if(window._packingTick){ clearInterval(window._packingTick); window._packingTick=null; }
+  renderRun();
+  toast('Packing complete', 'success');
+}
+
+// ─── PD QUANTITY REVIEW GATE ──────────────────────
+// Called before batch is released to production
+// PD reviews all batching quantities and BBDs
+function renderPDBatchReview(wo, run, r){
+  const review = run.pdReview || {};
+  let h = `<div style="font-family:var(--fh);font-size:18px;font-weight:700;margin-bottom:12px;">PD Batch Review</div>`;
+  h += `<div style="font-size:13px;color:var(--text2);margin-bottom:14px;">Review batching quantities and BBDs before releasing to production. Flag any issues.</div>`;
+
+  const allIng = [...(r.warehouseIngredients||[]), ...(r.batchIngredients||[])];
+  allIng.forEach(ing => {
+    const rec = run.stepRecords[ing.id];
+    if(!rec) return;
+    const cq = calcIngQty(ing, wo, r);
+    const qtyOk = !cq.qty || Math.abs(parseFloat(rec.qty||0) - parseFloat(cq.qty||0)) <= parseFloat(cq.qty||0)*0.01;
+    const bbdOk = rec.bbd && rec.bbd.trim();
+    const hasIssue = !qtyOk || !bbdOk;
+
+    h += `<div style="padding:10px 13px;background:var(--surface);border:1.5px solid ${hasIssue?'rgba(231,76,60,0.4)':'rgba(46,204,113,0.3)'};border-radius:8px;margin-bottom:8px;">`;
+    h += `<div style="display:flex;justify-content:space-between;align-items:center;">`;
+    h += `<div><div style="font-weight:600;font-size:14px;">${ing.name}</div><div style="font-family:var(--fm);font-size:11px;color:var(--text2);">${ing.code}</div></div>`;
+    h += `<div style="text-align:right;font-size:12px;">`;
+    h += `<div>Required: <strong>${cq.qty} ${ing.unit}</strong></div>`;
+    h += `<div style="color:${qtyOk?'var(--green)':'var(--red)'};">Issued: <strong>${rec.qty||'?'} ${ing.unit}</strong></div>`;
+    h += `<div style="color:${bbdOk?'var(--text2)':'var(--red)'};">BBD: ${rec.bbd||'NOT RECORDED'}</div>`;
+    h += `</div></div>`;
+    if(hasIssue){
+      h += `<div style="margin-top:8px;"><input class="sinp" id="pd-flag-${ing.id}" placeholder="Flag issue or note..." style="font-size:13px;"/></div>`;
+    }
+    h += `</div>`;
+  });
+
+  const hasFlags = review.flags && Object.keys(review.flags).length > 0;
+  h += `<div style="margin-top:14px;"><textarea class="sinp" id="pd-review-notes" placeholder="Overall notes (optional)..." style="min-height:60px;width:100%;resize:vertical;">${review.notes||''}</textarea></div>`;
+  h += `<div style="display:flex;gap:8px;margin-top:12px;">`;
+  h += `<button class="bsign" style="background:var(--green);color:#000;" onclick="approvePDBatchReview()">&#10003; Approve & Release to Production</button>`;
+  h += `</div>`;
+  return h;
+}
+
+function approvePDBatchReview(){
+  const run = S.batchRuns[curWO.id];
+  const r = RECIPES.find(x=>x.id===curWO.recipeId);
+  const flags = {};
+  const allIng = [...(r.warehouseIngredients||[]), ...(r.batchIngredients||[])];
+  allIng.forEach(ing=>{
+    const el = document.getElementById('pd-flag-'+ing.id);
+    if(el && el.value.trim()) flags[ing.id] = el.value.trim();
+  });
+  const notes = document.getElementById('pd-review-notes')?.value.trim()||'';
+  run.pdReview = { approvedBy: S.user.name, approvedAt: new Date().toISOString(), flags, notes };
+  saveBatchRun(curWO.id);
+  // Now actually release
+  releaseToProd(curWO.id);
+  toast('Batch approved and released to production', 'success');
+  backToDash();
+}
+
+// ─── PD ALERT ON OUT OF SPEC ─────────────────────
+function flagOutOfSpec(recipeCode, batchNum, woNum, failedFields){
+  // Store alert in Firebase for PD to see on their dashboard
+  const alert = {
+    id: 'alert_'+Date.now(),
+    type: 'qc_out_of_spec',
+    recipeCode, batchNum, woNum,
+    failedFields,
+    ts: new Date().toISOString(),
+    read: false
+  };
+  if(!S.pdAlerts) S.pdAlerts = [];
+  S.pdAlerts.unshift(alert);
+  fbSave('config', 'pd_alerts', {alerts: S.pdAlerts});
+  save();
+}
+
+async function loadPDAlerts(){
+  try{
+    const d = await fbLoad('config','pd_alerts');
+    if(d && d.alerts) S.pdAlerts = d.alerts;
+  }catch(e){}
+}
+
+// ─── CORRECTIVE ACTION FLOW ───────────────────────
+function renderCorrectiveAction(run){
+  const ca = run.correctiveAction || {};
+  if(ca.complete) return '';
+
+  let h = `<div style="background:var(--red-dim);border:1px solid rgba(231,76,60,0.4);border-radius:8px;padding:12px 14px;margin-bottom:10px;">`;
+  h += `<div style="font-weight:700;color:var(--red);font-size:14px;margin-bottom:8px;">&#9888; Out of Spec \u2014 Corrective Action Required</div>`;
+  h += `<div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Contact PD for instructions. Record what was added below, then confirm addition to kettle.</div>`;
+
+  if(!ca.ingredientAdded){
+    h += `<div class="inp-row"><input class="sinp" id="ca-ingredient" placeholder="Ingredient added (e.g. Sodium Citrate 0.2kg)" /></div>`;
+    h += `<button class="bsign" style="background:var(--orange);color:#000;margin-bottom:8px;" onclick="confirmCorrectiveAddition()">&#10003; Confirm Addition to Kettle</button>`;
+  } else {
+    h += `<div style="color:var(--green);font-size:13px;font-weight:600;margin-bottom:8px;">&#10003; Added: ${ca.ingredientAdded}</div>`;
+    if(!ca.retestStarted){
+      h += `<button class="bsign" style="background:var(--teal);color:#000;" onclick="startRetestCountdown()">&#9654; Start 5 Minute Retest Countdown</button>`;
+    } else if(ca.retestComplete){
+      h += `<div style="color:var(--green);font-size:13px;font-weight:600;">&#9989; Retest countdown complete \u2014 re-run QC</div>`;
+    } else {
+      const elapsed = Math.floor((Date.now()-new Date(ca.retestStartTs).getTime())/1000);
+      const remaining = Math.max(0, 300-elapsed);
+      const m=Math.floor(remaining/60), s=remaining%60;
+      h += `<div style="font-family:var(--fm);font-size:24px;color:var(--accent);" id="retest-cd">${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}</div>`;
+      if(!window._retestTick){
+        window._retestTick = setInterval(()=>{
+          const run2=S.batchRuns[curWO.id];
+          if(!run2||!run2.correctiveAction||run2.correctiveAction.retestComplete){clearInterval(window._retestTick);window._retestTick=null;return;}
+          const e2=Math.floor((Date.now()-new Date(run2.correctiveAction.retestStartTs).getTime())/1000);
+          const r2=Math.max(0,300-e2);
+          const el=document.getElementById('retest-cd');
+          if(el) el.textContent=String(Math.floor(r2/60)).padStart(2,'0')+':'+String(r2%60).padStart(2,'0');
+          if(r2<=0){run2.correctiveAction.retestComplete=true;saveBatchRun(curWO.id);clearInterval(window._retestTick);window._retestTick=null;toast('Retest ready \u2014 take new QC sample','success');renderRun();}
+        },1000);
+      }
+    }
+  }
+  h += `</div>`;
+  return h;
+}
+
+function confirmCorrectiveAddition(){
+  const ing = document.getElementById('ca-ingredient')?.value.trim();
+  if(!ing){ toast('Enter what was added','error'); return; }
+  const run = S.batchRuns[curWO.id];
+  if(!run.correctiveAction) run.correctiveAction = {};
+  run.correctiveAction.ingredientAdded = ing;
+  run.correctiveAction.addedAt = new Date().toISOString();
+  run.correctiveAction.addedBy = S.user.name;
+  run.auditLog.push({type:'corrective',stepNum:'QC',opName:S.user.name,opRole:S.user.role,ts:new Date().toISOString(),val:'Corrective: '+ing});
+  saveBatchRun(curWO.id);
+  renderRun();
+}
+
+function startRetestCountdown(){
+  const run = S.batchRuns[curWO.id];
+  if(!run.correctiveAction) run.correctiveAction = {};
+  run.correctiveAction.retestStarted = true;
+  run.correctiveAction.retestStartTs = new Date().toISOString();
+  run.correctiveAction.retestComplete = false;
+  saveBatchRun(curWO.id);
+  renderRun();
+}
+
+
+// ─── PROCESSING CHECK SHEET ──────────────────────
+function showProcessingCheckSheet(){
+  if(!curWO){toast('No active batch','error');return;}
+  document.getElementById('pcs-badge').textContent=S.user.name;
+  renderPCS();
+  showScreen('screen-pcs');
+}
+
+function savePCSAndBack(){
+  // Auto-saves on every field change, just go back
+  toast('Check sheet saved','success');
+  backToRun();
+}
+
+function savePCSField(field, value){
+  if(!curWO)return;
+  const run=S.batchRuns[curWO.id];
+  if(!run.pcs)run.pcs={};
+  run.pcs[field]=value;
+  saveBatchRun(curWO.id);
+}
+
+function renderPCS(){
+  if(!curWO)return;
+  const run=S.batchRuns[curWO.id];
+  const pcs=run.pcs||{};
+  const wo=curWO;
+  const r=RECIPES.find(x=>x.id===wo.recipeId)||{};
+  const b=document.getElementById('pcs-body');
+  let h='';
+
+  // Header info
+  h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">`;
+  h+=`<div class="pcs-section" style="margin-bottom:0;"><div class="pcs-section-body" style="padding:10px 13px;">`;
+  h+=`<div style="font-size:11px;color:var(--text2);">PROD DATE</div><div style="font-weight:700;">${wo.productDate||'—'}</div>`;
+  h+=`<div style="font-size:11px;color:var(--text2);margin-top:6px;">PRODUCT</div><div style="font-weight:700;">${r.name||'—'}</div>`;
+  h+=`</div></div>`;
+  h+=`<div class="pcs-section" style="margin-bottom:0;"><div class="pcs-section-body" style="padding:10px 13px;">`;
+  h+=`<div style="font-size:11px;color:var(--text2);">LOT NUMBER</div><div style="font-weight:700;">${wo.batchNum||'—'}</div>`;
+  h+=`<div style="font-size:11px;color:var(--text2);margin-top:6px;">PRODUCT CODE</div><div style="font-weight:700;">${r.code||'—'}</div>`;
+  h+=`</div></div></div>`;
+
+  // Start/finish times
+  h+=`<div class="pcs-section"><div class="pcs-section-hdr">&#128337; Run Times</div><div class="pcs-section-body">`;
+  h+=`<div class="pcs-row"><div class="pcs-label">Start Time</div><input class="pcs-inp" value="${pcs.startTime||''}" type="time" oninput="savePCSField('startTime',this.value)"/></div>`;
+  h+=`<div class="pcs-row"><div class="pcs-label">Finish Time</div><input class="pcs-inp" value="${pcs.finishTime||''}" type="time" oninput="savePCSField('finishTime',this.value)"/></div>`;
+  h+=`</div></div>`;
+
+  // In-line filter housing check
+  h+=`<div class="pcs-section"><div class="pcs-section-hdr">&#128268; In-Line Filter Housing Check</div><div class="pcs-section-body">`;
+  [['instantiser','Instantiser'],['recirculation','Recirculation'],['transfer','Transfer']].forEach(([key,label])=>{
+    const v=pcs['filter_'+key]||'';
+    const size=pcs['filter_'+key+'_size']||'';
+    h+=`<div class="pcs-row">
+      <div class="pcs-label">${label}</div>
+      <div class="pcs-yn">
+        <div class="pcs-yn-btn ${v==='YES'?'yes-active':''}" onclick="setPCSYN('filter_${key}','YES')">YES</div>
+        <div class="pcs-yn-btn ${v==='NO'?'no-active':''}" onclick="setPCSYN('filter_${key}','NO')">NO</div>
+      </div>
+      <input class="pcs-inp" value="${size}" placeholder="Size used" style="max-width:100px;" oninput="savePCSField('filter_${key}_size',this.value)"/>
+    </div>`;
+  });
+  h+=`</div></div>`;
+
+  // Metal detector verification CCP2
+  h+=`<div class="pcs-section"><div class="pcs-section-hdr">&#129304; Metal Detector Verification (CCP2)</div><div class="pcs-section-body">`;
+  h+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:8px;"><div style="font-size:10px;color:var(--text3);font-weight:700;">TEST TYPE</div><div style="font-size:10px;color:var(--text3);font-weight:700;">DET. START</div><div style="font-size:10px;color:var(--text3);font-weight:700;">DET. END</div><div style="font-size:10px;color:var(--text3);font-weight:700;">INITIAL</div></div>`;
+  [['fe15','1.5mm Ferrous'],['nf15','1.5mm NF'],['ss25','2.5mm SS']].forEach(([key,label])=>{
+    const s=pcs['md_'+key+'_start']||'';
+    const e=pcs['md_'+key+'_end']||'';
+    const ini=pcs['md_'+key+'_init']||'';
+    h+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:6px;align-items:center;">
+      <div style="font-size:12px;">${label}</div>
+      <div class="pcs-yn">
+        <div class="pcs-yn-btn ${s==='YES'?'yes-active':''}" onclick="setPCSYN('md_${key}_start','YES')" style="padding:4px 8px;font-size:11px;">Y</div>
+        <div class="pcs-yn-btn ${s==='NO'?'no-active':''}" onclick="setPCSYN('md_${key}_start','NO')" style="padding:4px 8px;font-size:11px;">N</div>
+      </div>
+      <div class="pcs-yn">
+        <div class="pcs-yn-btn ${e==='YES'?'yes-active':''}" onclick="setPCSYN('md_${key}_end','YES')" style="padding:4px 8px;font-size:11px;">Y</div>
+        <div class="pcs-yn-btn ${e==='NO'?'no-active':''}" onclick="setPCSYN('md_${key}_end','NO')" style="padding:4px 8px;font-size:11px;">N</div>
+      </div>
+      <input class="pcs-inp" value="${ini}" placeholder="Init" style="max-width:60px;" oninput="savePCSField('md_${key}_init',this.value)"/>
+    </div>`;
+  });
+  h+=`</div></div>`;
+
+  // Pasteurisation set points CCP1
+  h+=`<div class="pcs-section"><div class="pcs-section-hdr">&#127777; Pasteurisation Set Points (CCP1) <span style="font-size:11px;color:var(--text2);margin-left:6px;">Limits: 78-95\u00b0C</span></div><div class="pcs-section-body">`;
+  h+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:8px;"><div style="font-size:10px;color:var(--text3);font-weight:700;">PHASE</div><div style="font-size:10px;color:var(--text3);font-weight:700;">TEMP (\u00b0C)</div><div style="font-size:10px;color:var(--text3);font-weight:700;">TIME</div><div style="font-size:10px;color:var(--text3);font-weight:700;">INITIAL</div></div>`;
+  [['start','START'],['third1','1/3 H.T.'],['third2','2/3 H.T.'],['end','END']].forEach(([key,label])=>{
+    const temp=pcs['past_'+key+'_temp']||'';
+    const time=pcs['past_'+key+'_time']||'';
+    const ini=pcs['past_'+key+'_init']||'';
+    const tempNum=parseFloat(temp);
+    const inRange=!isNaN(tempNum)&&tempNum>=78&&tempNum<=95;
+    h+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:6px;align-items:center;">
+      <div style="font-size:12px;font-weight:600;">${label}</div>
+      <input class="pcs-inp" value="${temp}" placeholder="—" type="text" inputmode="decimal"
+        style="border-color:${temp?(inRange?'var(--green)':'var(--red)'):'var(--border2)'};"
+        oninput="savePCSField('past_${key}_temp',this.value);renderPCS();"/>
+      <input class="pcs-inp" value="${time}" placeholder="HH:MM" type="time" oninput="savePCSField('past_${key}_time',this.value)"/>
+      <input class="pcs-inp" value="${ini}" placeholder="Init" style="max-width:60px;" oninput="savePCSField('past_${key}_init',this.value)"/>
+    </div>`;
+  });
+  h+=`</div></div>`;
+
+  // Scale weight verification
+  h+=`<div class="pcs-section"><div class="pcs-section-hdr">&#9878; Scale Weight Verification (+/-0.5%)</div><div class="pcs-section-body">`;
+  h+=`<div class="pcs-row"><div class="pcs-label">Scale ID</div><input class="pcs-inp" value="${pcs.scaleId||''}" placeholder="Scale ID" oninput="savePCSField('scaleId',this.value)"/></div>`;
+  h+=`<div class="pcs-row"><div class="pcs-label">Mass Weight (kg)</div><input class="pcs-inp" value="${pcs.massWeight||''}" type="text" inputmode="decimal" oninput="savePCSField('massWeight',this.value)"/></div>`;
+  h+=`<div class="pcs-row"><div class="pcs-label">Nominated Net Weight</div><input class="pcs-inp" value="${pcs.nomWeight||r.batchSize||''}" type="text" inputmode="decimal" oninput="savePCSField('nomWeight',this.value)"/><div class="pcs-unit">Kg</div></div>`;
+  h+=`</div></div>`;
+
+  // Packing information
+  h+=`<div class="pcs-section"><div class="pcs-section-hdr">&#128230; Packing Information</div><div class="pcs-section-body">`;
+  const packRun=run.packingTimer||{};
+  h+=`<div class="pcs-row"><div class="pcs-label">Packing Start</div><div style="font-family:var(--fm);font-size:13px;color:var(--accent);">${packRun.startTs?fmt(packRun.startTs):'Not started'}</div></div>`;
+  h+=`<div class="pcs-row"><div class="pcs-label">Packing End</div><div style="font-family:var(--fm);font-size:13px;color:var(--accent);">${packRun.endTs?fmt(packRun.endTs):'Not ended'}</div></div>`;
+  // Duration
+  if(packRun.startTs&&packRun.endTs){
+    const diffMin=Math.round((new Date(packRun.endTs)-new Date(packRun.startTs))/60000);
+    h+=`<div class="pcs-row"><div class="pcs-label">Total Packing Time</div><div style="font-weight:700;color:var(--green);">${diffMin} min</div></div>`;
+  }
+  h+=`<div class="pcs-row"><div class="pcs-label">Qty Packed (kg)</div><input class="pcs-inp" value="${pcs.qtyPacked||packRun.totalWeight||''}" type="text" inputmode="decimal" oninput="savePCSField('qtyPacked',this.value)"/><div class="pcs-unit">Kg</div></div>`;
+  h+=`<div class="pcs-row"><div class="pcs-label">Customer</div><input class="pcs-inp" value="${pcs.customer||''}" placeholder="Customer name" oninput="savePCSField('customer',this.value)"/></div>`;
+  h+=`</div></div>`;
+
+  // Retention samples
+  h+=`<div class="pcs-section"><div class="pcs-section-hdr">&#129514; Retention Samples</div><div class="pcs-section-body">`;
+  for(let i=1;i<=5;i++){
+    const st=pcs['ret_'+i+'_time']||'';
+    const sc=pcs['ret_'+i+'_by']||'';
+    h+=`<div style="display:grid;grid-template-columns:30px 1fr 1fr;gap:6px;margin-bottom:6px;align-items:center;">
+      <div style="font-size:13px;font-weight:700;color:var(--text2);">${i}</div>
+      <input class="pcs-inp" value="${st}" type="time" placeholder="Time" oninput="savePCSField('ret_${i}_time',this.value)"/>
+      <input class="pcs-inp" value="${sc}" placeholder="Collected by" oninput="savePCSField('ret_${i}_by',this.value)"/>
+    </div>`;
+  }
+  h+=`</div></div>`;
+
+  // Waste
+  h+=`<div class="pcs-section"><div class="pcs-section-hdr">&#9167; Waste</div><div class="pcs-section-body">`;
+  h+=`<div class="pcs-row"><div class="pcs-label">Bags</div><input class="pcs-inp" value="${pcs.wasteBags||''}" type="text" inputmode="decimal" oninput="savePCSField('wasteBags',this.value)"/></div>`;
+  h+=`<div class="pcs-row"><div class="pcs-label">Cartons</div><input class="pcs-inp" value="${pcs.wasteCartons||''}" type="text" inputmode="decimal" oninput="savePCSField('wasteCartons',this.value)"/></div>`;
+  h+=`<div class="pcs-row"><div class="pcs-label">Waste Product (kg)</div><input class="pcs-inp" value="${pcs.wasteProduct||''}" type="text" inputmode="decimal" oninput="savePCSField('wasteProduct',this.value)"/></div>`;
+  h+=`</div></div>`;
+
+  // Comments
+  h+=`<div class="pcs-section"><div class="pcs-section-hdr">&#128172; Comments / Corrective Action</div><div class="pcs-section-body">`;
+  h+=`<textarea class="pcs-inp" style="min-height:80px;width:100%;resize:vertical;" placeholder="Any issues or corrective actions..." oninput="savePCSField('comments',this.value)">${pcs.comments||''}</textarea>`;
+  h+=`</div></div>`;
+
+  h+=`<div style="padding-bottom:30px;"></div>`;
+  b.innerHTML=h;
+}
+
+function setPCSYN(field, value){
+  savePCSField(field, value);
+  renderPCS();
 }
 
 // ─── LABEL CHECKER ───────────────────────────────
