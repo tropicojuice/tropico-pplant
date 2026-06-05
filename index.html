@@ -400,7 +400,7 @@
       <div class="rm">Size <span id="r-size"></span></div>
     </div>
     <div class="prog-wrap"><div class="prog-fill" id="r-prog" style="width:0%"></div></div>
-    <div style="margin-top:8px;"><button onclick="showProcessingCheckSheet()" style="padding:6px 12px;background:var(--surface3);border:1px solid var(--border2);border-radius:6px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;" id="pcs-btn">&#128203; Processing Check Sheet</button></div>
+    <div style="margin-top:8px;" id="pcs-btn-wrap"><button onclick="showProcessingCheckSheet()" style="padding:6px 12px;background:var(--surface3);border:1px solid var(--border2);border-radius:6px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;" id="pcs-btn">&#128203; Processing Check Sheet</button></div>
   </div>
   <div class="run-body" id="run-body"></div>
 </div>
@@ -630,7 +630,7 @@ const COCO04P = {
     {id:'labels_flav', name:'Flavours & Retest', col:'#e74c3c', type:'mixed',
      steps:[
        {id:'l2',num:'13',desc:'Allow <strong>5 min mixing</strong> after any additions before re-sampling',type:'setup_step',sign:true},
-       {id:'l3',num:'14',desc:'Sample meets parameters — <strong>approved by Supervisor or R&D</strong>. Proceed to flavours.',type:'gate',gate:true,role:'supervisor'},
+       {id:'l3',num:'14',desc:'Sample meets parameters — <strong>approved by Supervisor, PD or Admin</strong>. Proceed to flavours.',type:'gate',gate:true,role:'supervisor_pd'},
        {id:'l4a',num:'15',desc:'Add <strong>FLAVOUR — ESCOCO04</strong> — <strong>6.1 Kg</strong>. Rinse container with 1L water.',type:'ingredient',sign:true,inpLabel:'Actual weight added — ESCOCO04',inpUnit:'Kg',target:'6.1 Kg'},
      ]},
     {id:'hipex', name:'HIPEX Checks & Transfer', col:'#1abc9c', type:'setup',
@@ -1405,6 +1405,9 @@ function renderRun(){
   const wo=curWO,r=RECIPES.find(x=>x.id===wo.recipeId),run=S.batchRuns[wo.id];
   if(curMode==='batching') renderBatching(r,run);
   else renderProduction(r,run);
+  // Show PCS button only in production mode
+  const pcsBtnWrap=document.getElementById('pcs-btn-wrap');
+  if(pcsBtnWrap) pcsBtnWrap.style.display=curMode==='production'?'block':'none';
 }
 
 // ─── BATCHING MODE ────────────────────────────────
@@ -1779,45 +1782,86 @@ function signSection(secId){
 }
 
 function renderQC(step,run){
+  const r=RECIPES.find(x=>x.id===curWO.recipeId);
+  if(!run.qcAttempts) run.qcAttempts=[];
+  const currentAttempt=run.qcAttempts.length+1;
   const qd=run.qcData||{};
-  let h=`<div style="font-size:11px;color:var(--text2);margin-bottom:7px;font-weight:600;">BATCH ${curWO.num} &middot; #${curWO.batchNum} &middot; ${RECIPES.find(r=>r.id===curWO.recipeId).batchSize}</div><div class="qc-grid">`;
+  let h='';
+
+  h+=`<div style="font-size:11px;color:var(--text2);margin-bottom:9px;font-weight:600;">BATCH ${curWO.num} &middot; #${curWO.batchNum} &middot; ${r.batchSize} &middot; <span style="color:var(--accent);">Test ${currentAttempt}</span></div>`;
+
+  // Previous attempts
+  if(run.qcAttempts.length>0){
+    h+=`<div style="margin-bottom:10px;">`;
+    run.qcAttempts.forEach(a=>{
+      const sc=a.approvedOutOfSpec?'var(--orange)':a.pass?'var(--green)':'var(--red)';
+      const sl=a.approvedOutOfSpec?'QA APPROVED OOS':a.pass?'PASS':'FAIL';
+      h+=`<div style="padding:7px 10px;background:var(--surface3);border-radius:7px;margin-bottom:5px;border-left:3px solid ${sc};">`;
+      h+=`<div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="font-size:12px;font-weight:700;color:${sc};">Test ${a.attemptNum} — ${sl}</span><span style="font-size:10px;color:var(--text3);font-family:var(--fm);">${fmt(a.ts)}</span></div>`;
+      h+=`<div style="display:flex;gap:8px;flex-wrap:wrap;">`;
+      step.qcFields.forEach(f=>{
+        const v=a.data[f.key]||'—';
+        const ok=f.min===null&&f.max===null?true:(()=>{const n=parseFloat(v);return !isNaN(n)&&checkQCSpec(n,f);})();
+        h+=`<span style="font-size:11px;font-family:var(--fm);color:${ok?'var(--teal)':'var(--red)'};">${f.label}: ${v}</span>`;
+      });
+      h+=`</div>`;
+      if(a.correctiveAction) h+=`<div style="font-size:11px;color:var(--text2);margin-top:3px;">Corrective: ${a.correctiveAction}</div>`;
+      if(a.approvedNote) h+=`<div style="font-size:11px;color:var(--orange);margin-top:3px;">QA Note: ${a.approvedNote}</div>`;
+      h+=`</div>`;
+    });
+    h+=`</div>`;
+  }
+
+  // Current test inputs
+  h+=`<div class="qc-grid">`;
   step.qcFields.forEach(f=>{
     const v=qd[f.key]||'';
     let ic='qci';
-    if(v&&(f.min!==null||f.max!==null||f.operator)){
-      const n=parseFloat(v);
-      if(!isNaN(n)) ic+=checkQCSpec(n,f)?' pass':' fail';
-    }
-    // Use inputmode="decimal" for number fields, text for colour/acid
-    const isNum=(f.min!==null);
-    h+=`<div class="qc-cell">
-      <div class="qcl">${f.label}</div>
-      <div class="qcs">${f.spec}</div>
-      <input class="${ic}" id="qci-${f.key}" value="${v}" placeholder="—"
-        ${isNum?'inputmode="decimal" type="text"':''}
-        oninput="upQC('${f.key}',this.value)"/>
-    </div>`;
+    if(v&&(f.min!==null||f.max!==null||f.operator)){const n=parseFloat(v);if(!isNaN(n))ic+=' '+(checkQCSpec(n,f)?'pass':'fail');}
+    const isNum=(f.min!==null||f.max!==null);
+    h+=`<div class="qc-cell"><div class="qcl">${f.label}</div><div class="qcs">${f.spec}</div><input class="${ic}" id="qci-${f.key}" value="${v}" placeholder="—" ${isNum?'inputmode="decimal" type="text"':''} oninput="upQC('${f.key}',this.value)"/></div>`;
   });
-  h+=`</div>`;
-  // Banner placeholder — populated dynamically by updateQCBanner
-  h+=`<div id="qc-result-banner" class="qc-banner"></div>`;
-  // Corrective action panel if applicable
-  if(run && run.correctiveAction && !run.correctiveAction.complete){
+  h+=`</div><div id="qc-result-banner" class="qc-banner"></div>`;
+
+  // Corrective action loop
+  if(run.correctiveAction&&!run.correctiveAction.complete){
     h+=renderCorrectiveAction(run);
+  }
+
+  // QA override (only if all filled and something fails)
+  const allFilled=step.qcFields.every(f=>qd[f.key]&&qd[f.key].trim());
+  if(allFilled){
+    const allPass=step.qcFields.every(f=>{
+      if(f.min===null&&f.max===null)return true;
+      const n=parseFloat(qd[f.key]);return !isNaN(n)&&checkQCSpec(n,f);
+    });
+    if(!allPass){
+      if(!run.showQAOverride){
+        h+=`<button class="btn-sm out" style="width:100%;padding:10px;margin-top:6px;color:var(--orange);border-color:var(--orange);" onclick="showQAOverride()">QA: Approve Out of Spec</button>`;
+      } else {
+        h+=`<div style="background:rgba(243,156,18,0.1);border:1px solid rgba(243,156,18,0.3);border-radius:8px;padding:12px;margin-top:8px;">`;
+        h+=`<div style="font-weight:700;color:var(--orange);margin-bottom:8px;">⚠️ QA Out of Spec Approval</div>`;
+        h+=`<div class="inp-row"><input class="sinp" id="qa-override-note" placeholder="Reason for approval (required)..."/></div>`;
+        h+=`<button class="bsign" style="background:var(--orange);color:#000;margin-top:6px;" onclick="submitQAOverride()">QA Approve &amp; Proceed</button>`;
+        h+=`</div>`;
+      }
+    }
   }
   return h;
 }
 
-function checkQCSpec(n, f){
-  // Handles: range (min+max), max only (<X), min only (>X), record only (null+null)
-  if(f.operator==='lt') return n < f.max;
-  if(f.operator==='lte') return n <= f.max;
-  if(f.operator==='gt') return n > f.min;
-  if(f.operator==='gte') return n >= f.min;
-  if(f.min!==null && f.max!==null) return n >= f.min && n <= f.max;
-  if(f.min===null && f.max!==null) return n <= f.max;
-  if(f.min!==null && f.max===null) return n >= f.min;
-  return true; // record only
+function showQAOverride(){
+  const run=S.batchRuns[curWO.id];
+  run.showQAOverride=true;
+  saveBatchRun(curWO.id);
+  renderRun();
+}
+
+function submitQAOverride(){
+  const note=document.getElementById('qa-override-note')?.value.trim();
+  if(!note){toast('Reason required for out of spec approval','error');return;}
+  pmCtx={type:'qa_override',note};
+  openPM('QA Out of Spec Approval','Requires QA PIN to approve','qa');
 }
 
 function upQC(key,val){
@@ -1935,9 +1979,13 @@ function pp(k){
 function confirmPM(){
   const ctx=pmCtx;
   const needRole=ctx.role||null;
-  let op=needRole?S.operators.find(o=>o.pin===pmPin&&(o.role===needRole||o.role==='admin')):S.operators.find(o=>o.pin===pmPin);
+  // Handle multi-role gates like 'supervisor_pd'
+  const allowedRoles=needRole?needRole.split('_'):[]; // 'supervisor_pd' -> ['supervisor','pd']
+  let op=needRole
+    ?S.operators.find(o=>o.pin===pmPin&&(allowedRoles.includes(o.role)||o.role==='admin'))
+    :S.operators.find(o=>o.pin===pmPin);
   if(!op){
-    document.getElementById('pm-err').textContent=needRole?`Needs ${needRole} PIN.`:'Incorrect PIN.';
+    const roleLabel=needRole?allowedRoles.join(' or '):''; document.getElementById('pm-err').textContent=needRole?`Needs ${roleLabel} PIN.`:'Incorrect PIN.';
     document.getElementById('pm-err').classList.add('show');
     pmPin='';dots('pm-dots',pmPin,3);document.getElementById('pm-ok').disabled=true;return;
   }
@@ -1966,8 +2014,60 @@ function confirmPM(){
     const inp=document.getElementById('inp-'+ctx.stepId);
     const val=inp?inp.value.trim():'';
     run.stepRecords[ctx.stepId]={opId:op.id,opName:op.name,opRole:op.role,ts,val,hasPhoto:!!photos[ctx.stepId]};
-    run.auditLog.push({type:step.gate?'gate':(step.type==='qc'?'qc':'sign'),stepId:ctx.stepId,stepNum:step.num,opName:op.name,opRole:op.role,ts,val,qcData:step.type==='qc'?{...run.qcData}:null});
+    // Record QC attempt in history
+    if(step.type==='qc'){
+      if(!run.qcAttempts)run.qcAttempts=[];
+      const qd2={...(run.qcData||{})};
+      const allPass2=step.qcFields?step.qcFields.every(f=>{
+        if(f.min===null&&f.max===null)return true;
+        const n=parseFloat(qd2[f.key]);return !isNaN(n)&&checkQCSpec(n,f);
+      }):true;
+      run.qcAttempts.push({attemptNum:run.qcAttempts.length+1,data:qd2,ts,pass:allPass2,approvedOutOfSpec:false});
+      run.qcData={}; // clear for potential retest
+    }
+    run.auditLog.push({type:step.gate?'gate':(step.type==='qc'?'qc':'sign'),stepId:ctx.stepId,stepNum:step.num,opName:op.name,opRole:op.role,ts,val,qcData:step.type==='qc'?{...run.qcAttempts[run.qcAttempts.length-1]?.data}:null});
+    // Auto PCS start time — first production step signed off
+    if(curMode==='production'){
+      if(!run.pcs) run.pcs={};
+      if(!run.pcs.startTime){
+        run.pcs.startTime=new Date(ts).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit',hour12:false});
+      }
+      // Auto PCS finish time + stop packing timer on FIN sign-off
+      if(ctx.stepId==='p4'){
+        run.pcs.finishTime=new Date(ts).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit',hour12:false});
+        if(run.packingTimer&&!run.packingTimer.endTs) run.packingTimer.endTs=ts;
+      }
+      // Auto start packing timer when p2 (START PACKING) is signed off
+      if(ctx.stepId==='p2'){
+        if(!run.packingTimer) run.packingTimer={};
+        if(!run.packingTimer.startTs) run.packingTimer.startTs=ts;
+        if(val) run.packingTimer.totalWeight=val;
+      }
+    }
     saveBatchRun(curWO.id);closePM();toast('\u2713 Step '+step.num+' signed by '+op.name,'success');renderRun();
+  } else if(ctx.type==='qa_override'){
+    // QA approved out of spec product
+    const run=S.batchRuns[curWO.id];
+    const r=RECIPES.find(x=>x.id===curWO.recipeId);
+    const step=allSteps(r).find(s=>s.id==='qc1');
+    const qd={...(run.qcData||{})};
+    const attempt={
+      attemptNum:(run.qcAttempts||[]).length+1,
+      data:qd,
+      ts:new Date().toISOString(),
+      pass:false,
+      approvedOutOfSpec:true,
+      approvedBy:op.name,
+      approvedNote:ctx.note,
+    };
+    if(!run.qcAttempts)run.qcAttempts=[];
+    run.qcAttempts.push(attempt);
+    run.qcData={};
+    run.showQAOverride=false;
+    // Record as QC step complete with flag
+    run.stepRecords['qc1']={opId:op.id,opName:op.name,opRole:op.role,ts:new Date().toISOString(),val:'QA APPROVED OUT OF SPEC: '+ctx.note,outOfSpec:true};
+    run.auditLog.push({type:'qc_override',stepNum:'QC',opName:op.name,opRole:op.role,ts:new Date().toISOString(),val:'QA APPROVED OOS: '+ctx.note});
+    saveBatchRun(curWO.id);closePM();toast('QA out of spec approval recorded','success');renderRun();
   }
 }
 
@@ -2282,11 +2382,26 @@ function downloadBatchRecord(){
 
   <!-- QC RESULTS -->
   <h2>2. QC In-Line Testing Results</h2>
+  ${(run.qcAttempts&&run.qcAttempts.length>0)?`
   <table>
-    <thead><tr><th>Parameter</th><th>Spec</th><th>Result</th><th>Status</th></tr></thead>
-    <tbody>${qcRows}</tbody>
-  </table>
-  ${qcSign?`<div style="font-size:11px;color:#667;margin-top:-10px;margin-bottom:14px;">QC signed off by: <strong>${qcSign.opName}</strong> (${qcSign.opRole}) &mdash; ${fmt(qcSign.ts)}</div>`:''}
+    <thead><tr><th>Test #</th><th>Parameter</th><th>Spec</th><th>Result</th><th>Status</th></tr></thead>
+    <tbody>
+    ${run.qcAttempts.map(a=>{
+      const statusLabel=a.approvedOutOfSpec?'QA APPROVED OOS':a.pass?'PASS':'FAIL';
+      const statusColor=a.approvedOutOfSpec?'#e67e22':a.pass?'#27ae60':'#e74c3c';
+      return (r.sections.find(s=>s.id==='qc')?.steps[0]?.qcFields||[]).map((f,fi)=>`
+        <tr>
+          ${fi===0?`<td rowspan="${(r.sections.find(s=>s.id==='qc')?.steps[0]?.qcFields||[]).length+1}" style="font-weight:700;vertical-align:top;color:${statusColor};">Test ${a.attemptNum}<br/>${statusLabel}</td>`:''}
+          <td>${f.label}</td><td>${f.spec}</td>
+          <td style="font-weight:700;">${a.data[f.key]||'—'}</td>
+          <td style="color:${f.min===null&&f.max===null?'#666':(()=>{const n=parseFloat(a.data[f.key]);return !isNaN(n)&&((f.operator==='lt'?n<f.max:f.operator==='gt'?n>f.min:n>=f.min&&n<=f.max))?'#27ae60':'#e74c3c'})()};">${f.min===null&&f.max===null?'Recorded':'—'}</td>
+        </tr>`).join('')+
+        (a.correctiveAction?`<tr><td colspan="4" style="font-style:italic;color:#666;">Corrective action: ${a.correctiveAction}</td></tr>`:'')+
+        (a.approvedNote?`<tr><td colspan="4" style="color:#e67e22;font-style:italic;">QA Note: ${a.approvedNote}</td></tr>`:'');
+    }).join('')}
+    </tbody>
+  </table>`:`<table><thead><tr><th>Parameter</th><th>Spec</th><th>Result</th><th>Status</th></tr></thead><tbody>${qcRows}</tbody></table>`}
+  ${qcSign?`<div style="font-size:11px;color:#667;margin-top:-10px;margin-bottom:14px;">QC signed off by: <strong>${qcSign.opName}</strong> (${qcSign.opRole}) &mdash; ${fmt(qcSign.ts)}${qcSign.outOfSpec?' <span style="color:#e67e22;font-weight:700;">[OUT OF SPEC - QA APPROVED]</span>':''}</div>`:''}
 
   <!-- PRODUCTION STEPS -->
   <h2>3. Production Steps &mdash; Sign-Off Record</h2>
@@ -3153,9 +3268,11 @@ function renderCorrectiveAction(run){
       h += `<div style="color:var(--green);font-size:13px;font-weight:600;">&#9989; Retest countdown complete \u2014 re-run QC</div>`;
     } else {
       const elapsed = Math.floor((Date.now()-new Date(ca.retestStartTs).getTime())/1000);
-      const remaining = Math.max(0, 300-elapsed);
+      const retestTotalSecs2=(ca.retestMins||10)*60;
+      const remaining = Math.max(0, retestTotalSecs2-elapsed);
       const m=Math.floor(remaining/60), s=remaining%60;
-      h += `<div style="font-family:var(--fm);font-size:24px;color:var(--accent);" id="retest-cd">${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}</div>`;
+      const retestTotal=retestTotalSecs2;
+      h += `<div style="font-family:var(--fm);font-size:24px;color:var(--accent);" id="retest-cd">${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}</div><div style="font-size:11px;color:var(--text2);margin-top:3px;">${ca.retestMins||10} minute retest countdown</div>`;
       if(!window._retestTick){
         window._retestTick = setInterval(()=>{
           const run2=S.batchRuns[curWO.id];
@@ -3164,7 +3281,21 @@ function renderCorrectiveAction(run){
           const r2=Math.max(0,300-e2);
           const el=document.getElementById('retest-cd');
           if(el) el.textContent=String(Math.floor(r2/60)).padStart(2,'0')+':'+String(r2%60).padStart(2,'0');
-          if(r2<=0){run2.correctiveAction.retestComplete=true;saveBatchRun(curWO.id);clearInterval(window._retestTick);window._retestTick=null;toast('Retest ready \u2014 take new QC sample','success');renderRun();}
+          if(r2<=0){
+            run2.correctiveAction.retestComplete=true;
+            // Record corrective action in qcAttempts for audit
+            if(!run2.qcAttempts)run2.qcAttempts=[];
+            const lastAttempt=run2.qcAttempts[run2.qcAttempts.length-1];
+            if(lastAttempt&&!lastAttempt.correctiveAction) lastAttempt.correctiveAction=run2.correctiveAction.ingredientAdded;
+            // Reset for retest
+            run2.correctiveAction.complete=true;
+            run2.correctiveAction=null;
+            saveBatchRun(curWO.id);clearInterval(window._retestTick);window._retestTick=null;
+            // Remove the qc1 step record so operator can retest
+            delete run2.stepRecords['qc1'];
+            saveBatchRun(curWO.id);
+            toast('10 minutes complete \u2014 take new QC sample','success');renderRun();
+          }
         },1000);
       }
     }
@@ -3192,6 +3323,7 @@ function startRetestCountdown(){
   run.correctiveAction.retestStarted = true;
   run.correctiveAction.retestStartTs = new Date().toISOString();
   run.correctiveAction.retestComplete = false;
+  run.correctiveAction.retestMins = 10;
   saveBatchRun(curWO.id);
   renderRun();
 }
